@@ -1,0 +1,24 @@
+.erp-container {
+  /* Tamanhos exatos tirados do seu Figma */
+  width: 793px;
+  height: 878px;
+  
+  /* Canto arredondado 0 (retos) do seu Figma */
+  border-radius: 16px; 
+  
+  /* Cores baseadas no seu index.css e na opacidade do Figma */
+  background-color: var(--w); 
+  border: 1px solid rgba(158, 158, 158, 0.3); /* Mistura do cinza 9E9E9E com opacidade */
+  
+  /* Espaçamento interno padrão para afastar os elementos das bordas */
+  padding: 30px; 
+  box-sizing: border-box;
+  
+  /* Alinhamento dos itens internos: um embaixo do outro */
+  display: flex;
+  flex-direction: column;
+  gap: 20px; 
+  
+  /* Centraliza o container na página */
+  margin: 0 auto; 
+}
