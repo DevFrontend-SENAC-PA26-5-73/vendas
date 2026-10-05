@@ -1,0 +1,38 @@
+ .botao {
+  width: 130px;
+  height: 52px;
+  border: none;
+  border-radius: 10px;
+  font-size: var(--h2);
+  cursor: pointer;
+   display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-primaria {
+  background-color: var(--primaria);
+  color: var(--b);
+}
+
+.btn-secundaria {
+  background-color: var(--secundario);
+  color: var(--w);
+}
+
+.btn-b {
+  background-color: var(--b);
+  color: var(--w);
+}
+
+.btn-c {
+  background-color: var(--c);
+  color: var(--b);
+ 
+}
+
+.btn-w {
+  background-color: var(--w);
+  color: var(--b);
+  border: 1px solid var(--b);
+}

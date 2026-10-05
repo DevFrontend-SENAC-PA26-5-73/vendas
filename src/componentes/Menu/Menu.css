@@ -1,0 +1,69 @@
+.menu-container {
+  display: flex;
+  gap: 45px;
+  align-items: flex-start;
+}
+
+/* Caixa do menu */
+.menu-box {
+  width: 280px;
+  padding: 35px 25px;
+  border-radius: 8px;
+}
+
+/* Cada opção */
+.menu-item {
+  width: 210px;
+  height: 52px;
+
+  display: flex;
+  align-items: center;
+  gap: 15px;
+
+  padding: 0 18px;
+
+  font-size: 20px;
+  color: var(--b);
+
+  border-radius: 10px;
+}
+
+/* Menu verde */
+.menu-item.ativo {
+  background-color: var(--primaria);
+}
+
+/* Barra lateral */
+.sidebar {
+  width: 85px;
+  padding: 12px 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+
+  border-radius: 8px;
+}
+
+.sidebar svg {
+  width: 25px;
+  height: 25px;
+  color: var(--b);
+  stroke-width: 2;
+  cursor: pointer;
+}
+.sidebar svg {
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.sidebar svg:hover {
+  background-color: var(--primaria);
+}
+.menu-item.ativo:hover {
+  background-color: var(--c);
+  color: var(--b);
+}
