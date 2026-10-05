@@ -1,0 +1,37 @@
+.erp-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  width: 184px;              /* W: 184 do Figma */
+  height: 40px;             /* H: 40 do Figma */
+  padding: 0px 12px;        /* Padding do Figma */
+  gap: 10px;                /* Gap: 10 do Figma */
+  box-sizing: border-box;
+  border-radius: 8px;       /* Corner radius: 8 do Figma */
+  border: none;
+  cursor: pointer;
+  
+  /* PADRÃO: Sem fundo e texto escuro */
+  background-color: transparent;
+  color: var(--b);
+  transition: background-color 0.15s ease;
+}
+
+/* Quando passar o mouse por cima de qualquer botão, ele acende verde */
+.erp-menu-btn:hover {
+  background-color: var(--primaria);
+}
+
+/* CLASSE FIXA: Quando o botão for o selecionado, ele fica verde definitivo */
+.erp-menu-btn-ativo {
+  background-color: var(--primaria);
+}
+
+.erp-menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.erp-menu-text {
+  white-space: nowrap;
+}

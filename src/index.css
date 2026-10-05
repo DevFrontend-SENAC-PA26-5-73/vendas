@@ -44,3 +44,51 @@
   font-size: var(--h4);
   font-weight: var(--weight-light);
 }
+
+.medium-h1{
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h1);
+  font-weight: var(--weight-medium);
+}
+
+.medium-h2{
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h2);
+  font-weight: var(--weight-medium);
+}
+
+.medium-h3{
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h3);
+  font-weight: var(--weight-medium);
+}
+
+.medium-h4{
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h4);
+  font-weight: var(--weight-medium);
+}
+
+.bold-h1{
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h1);
+  font-weight: var(--weight-bold);
+}
+
+.bold-h2{
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h2);
+  font-weight: var(--weight-bold);
+}
+
+.bold-h3{
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h3);
+  font-weight: var(--weight-bold);
+}
+
+.bold-h4{
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h4);
+  font-weight: var(--weight-bold);
+}
