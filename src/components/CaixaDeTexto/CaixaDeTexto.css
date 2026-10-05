@@ -1,0 +1,25 @@
+.erp-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Tamanho estático do Figma e cores do seu index.css */
+.erp-input-field {
+  width: 128px;               /* W 128 da imagem */
+  height: 42px;              /* H 42 da imagem */
+  padding: 8px 12px;         /* Padding interno */
+  box-sizing: border-box;    /* Garante que o padding não mude o tamanho total */
+  
+  border: 1px solid #cccccc;
+  border-radius: 4px;
+  outline: none;
+  
+  background-color: var(--c); /* Usa a cor cinza do seu index.css */
+  color: var(--b);            /* Usa a cor do texto escuro do seu index.css */
+}
+
+/* Sombra bem sutil ao clicar */
+.erp-input-field:focus {
+  border-color: #999999;
+}
