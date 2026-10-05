@@ -1,4 +1,3 @@
-import React from 'react';
 import './MenuButton.css'; // Importa o CSS abaixo
 
 function MenuButton(props: any) {
