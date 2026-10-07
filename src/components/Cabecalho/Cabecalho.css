@@ -1,0 +1,79 @@
+html,body{
+    margin: 0;
+    padding: 0;
+}
+.container{
+    display: grid;
+    grid-template-columns: 300px auto;
+    grid-template-rows: 120px minmax(300px, auto) auto;
+    grid-template-areas:
+        "header header"
+        "aside main" 
+        "aside footer";
+     height: 90svh;   
+}
+
+
+.header {
+    grid-area: header;
+    background-color: rgb(6, 238, 161);
+
+    display: grid;
+    grid-template-columns: 50px 100px 1fr 30px 30px 50px;
+    align-items: center;
+    gap: 12px;
+    padding: 0 20px;
+}
+
+/* Logo */
+.logo {
+    width: 46px;
+    height: 46px;
+    background-color: white;
+    border-radius: 7px;
+}
+
+/* Nome da empresa */
+.nome-empresa {
+   font-family: "Montserrat", sans-serif 1.5px;
+}
+
+/* Barra de pesquisa */
+.pesquisa {
+    height: 34px;
+    width: 100%;
+    border: none;
+    border-radius: 7px;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+/* Botões */
+.botao {
+    width: 30px;
+    height: 30px;
+    border: none;
+    background-color: white;
+    cursor: pointer;
+}
+
+/* Botão de perfil */
+.perfil {
+    width: 46px;
+    height: 46px;
+    border: none;
+    border-radius: 7px;
+    background-color: white;
+    cursor: pointer;
+}
+/* ÍCONES */
+.botao,
+.perfil {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.botao:hover,
+.perfil:hover {
+    color: #00a86b;
+}

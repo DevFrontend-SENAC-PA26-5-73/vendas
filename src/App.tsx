@@ -1,12 +1,11 @@
 import Button from "./components/Button/Button";
-
+import Menu from "./pages/MenuGrid/Menu"; 
+import Cabecalho from "./components/Cabecalho/Cabecalho";
+import MenuButton from "./components/MenuButton/MenuButton";
 
 function App() {
     return (<> 
-   <Button texto="clique em mim" cor="btn-secundaria"/>
-    <Button texto="aperte aqui" cor="btn-primaria"/>
-    <Button texto ="clique aqui" cor="btn-c" />
-     
+        <Cabecalho/>
     </>
     )
 }
