@@ -11,6 +11,7 @@ import {
   Settings,
 } from "lucide-react";
 import "./MenuButton.css"; // Mantém o import do seu arquivo de estilo
+import CaixaDeTexto from "../CaixaDeTexto/CaixaDeTexto";
 
 function MenuButton() {
   // Controle de estado estático para saber qual botão está ativo em cada seção
@@ -31,33 +32,6 @@ function MenuButton() {
           <House size={25} />
           <span>Menu</span>
         </div>
-
-        <div 
-          className={`menu-item ${ativoMenu === "menu2" ? "ativo" : ""}`} 
-          onClick={() => setAtivoMenu("menu2")}
-        >
-          <ChartPie size={25} />
-          <span>Vendas</span>
-        </div>
-
-
-        <div 
-          className={`menu-item ${ativoMenu === "menu2" ? "ativo" : ""}`} 
-          onClick={() => setAtivoMenu("menu2")}
-        >
-          <ChartPie size={25} />
-          <span>Estoque</span>
-        </div>
-
-
-        <div 
-          className={`menu-item ${ativoMenu === "menu2" ? "ativo" : ""}`} 
-          onClick={() => setAtivoMenu("menu2")}
-        >
-          <ChartPie size={25} />
-          <span>Clientes</span>
-        </div>
-
       </div>
       </div>
   );

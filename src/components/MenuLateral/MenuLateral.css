@@ -1,0 +1,16 @@
+.sidebar{
+    display: flex;
+    flex-direction: column;
+    background-color: var(--primaria);
+    width: 290px;
+    height: 100svh;
+    padding: 32px;
+}
+
+.tag{
+    display: flex;
+    align-content: normal;
+    color: var(--b);
+}
+
+
