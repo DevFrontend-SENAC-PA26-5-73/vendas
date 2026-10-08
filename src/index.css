@@ -7,15 +7,15 @@
   --w: #fff;
 
   /*Tamanho das Letras*/
-  --h1: 1.5em;
+  --h1: 1.2em;
   --h2: 1em;
   --h3: 0.75em;
   --h4: 0.5em;
 
   /*Espessura*/
   --weight-light: 100;
-  --weight-medium: 300;
-  --weight-bold: 700;
+  --weight-medium: 500;
+  --weight-bold: 800;
 
 
   /*Formatação dos textos*/
