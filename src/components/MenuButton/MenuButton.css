@@ -1,37 +1,85 @@
-.erp-menu-btn {
-  display: inline-flex;
+.menu-container {
+  display: flex;
+  gap: 45px;
+  align-items: flex-start;
+}
+
+/* Caixa do menu lateral expandido */
+.menu-box {
+  width: 280px;
+  padding: 35px 25px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--w); /* Puxa o branco do seu index.css */
+}
+
+/* Cada opção do menu com texto */
+.menu-item {
+  width: 210px;
+  height: 52px;
+  display: flex;
   align-items: center;
-  width: 184px;              /* W: 184 do Figma */
-  height: 40px;             /* H: 40 do Figma */
-  padding: 0px 12px;        /* Padding do Figma */
-  gap: 10px;                /* Gap: 10 do Figma */
-  box-sizing: border-box;
-  border-radius: 8px;       /* Corner radius: 8 do Figma */
-  border: none;
-  cursor: pointer;
-  
-  /* PADRÃO: Sem fundo e texto escuro */
-  background-color: transparent;
+  gap: 15px;
+  padding: 0 18px;
+  font-size: 20px;
   color: var(--b);
-  transition: background-color 0.15s ease;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 
-/* Quando passar o mouse por cima de qualquer botão, ele acende verde */
-.erp-menu-btn:hover {
+/* Efeito de passar o mouse no item com texto */
+.menu-item:hover {
   background-color: var(--primaria);
 }
 
-/* CLASSE FIXA: Quando o botão for o selecionado, ele fica verde definitivo */
-.erp-menu-btn-ativo {
+/* Quando o item com texto estiver ativo (Verde fixo) */
+.menu-item.ativo {
   background-color: var(--primaria);
 }
 
-.erp-menu-icon {
+/* ------------------------------------------- */
+/* BARRA LATERAL COMPACTA (SÓ ÍCONES)          */
+/* ------------------------------------------- */
+.sidebar {
+  width: 85px;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  border-radius: 8px;
+  background-color: var(--w); /* Puxa o branco do seu index.css */
+}
+
+/* Envelopa cada ícone individualmente para poder criar o fundo verde redondo/quadrado */
+.sidebar > div {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 45px;
+  height: 45px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
 }
 
-.erp-menu-text {
-  white-space: nowrap;
+/* Estilo padrão do ícone Lucide */
+.sidebar svg {
+  width: 25px;
+  height: 25px;
+  color: var(--b);
+  stroke-width: 2;
+}
+
+/* Efeito de passar o mouse na barra compacta */
+.sidebar > div:hover {
+  background-color: var(--primaria);
+}
+
+/* Quando o ícone da barra compacta estiver ativo (Verde permanente do Figma) */
+.sidebar > div.ativo {
+  background-color: var(--primaria);
 }

@@ -1,19 +1,39 @@
-import './MenuButton.css'; // Importa o CSS abaixo
+import React, { useState } from "react";
+import {
+  House,
+  ChartPie,
+  CircleUserRound,
+  LayoutDashboard,
+  SquareMousePointer,
+  ArrowDownUp,
+  Box,
+  CircleDollarSign,
+  Settings,
+} from "lucide-react";
+import "./MenuButton.css"; // Mantém o import do seu arquivo de estilo
+import CaixaDeTexto from "../CaixaDeTexto/CaixaDeTexto";
 
-function MenuButton(props: any) {
-  // Se props.ativo for verdadeiro, aplica a classe de cor permanente
-  const classeAtivo = props.ativo ? 'erp-menu-btn-ativo' : '';
-  const classeFinal = `erp-menu-btn ${classeAtivo} medium-h2`.trim();
+function MenuButton() {
+  // Controle de estado estático para saber qual botão está ativo em cada seção
+  const [ativoMenu, setAtivoMenu] = useState("menu1");
+  const [ativoSidebar, setAtivoSidebar] = useState("house");
 
   return (
-    <button className={classeFinal} onClick={props.onClick}>
-      <span className="erp-menu-icon">
-        {props.icone}
-      </span>
-      <span className="erp-menu-text">
-        {props.texto}
-      </span>
-    </button>
+    <div className="menu-container">
+
+      {/* 1. CAIXA DO MENU (VERSÃO EXPANDIDA COM TEXTO) */}
+      <div className="menu-box">
+        
+        {/* Usamos a classe estática com base no estado 'ativoMenu' */}
+        <div 
+          className={`menu-item ${ativoMenu === "menu1" ? "ativo" : ""}`} 
+          onClick={() => setAtivoMenu("menu1")}
+        >
+          <House size={25} />
+          <span>Menu</span>
+        </div>
+      </div>
+      </div>
   );
 }
 
