@@ -1,0 +1,188 @@
+/* PAINÉIS LADO A LADO */
+.fornecedores-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 2.2fr) minmax(190px, 0.9fr);
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+}
+
+/* FORMULÁRIO PRINCIPAL */
+.formulario-fornecedor {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 500px;
+    padding: 0 12px 10px;
+    background-color: var(--w);
+    border: 2px solid var(--c);
+}
+.area-conteudo {
+    padding: 24px 12px;
+}
+
+/* TÍTULO */
+.titulo-fornecedor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    flex-shrink: 0;
+}
+
+.titulo-fornecedor h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* GRID DOS CAMPOS */
+.campos-fornecedor {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+    padding-top: 4px;
+}
+
+.campo {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    font-size: 10px;
+    color: #111;
+}
+
+.campo input:not([type="checkbox"]) {
+    width: 100%;
+    min-width: 0;
+    height: 24px;
+    padding: 4px 7px;
+    background-color: #f1f1f6;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    outline: none;
+    font-family: inherit;
+    font-size: 10px;
+}
+
+.campo input:focus {
+    border-color: var(--c);
+    background-color: var(--w);
+}
+
+/* TAMANHOS E POSIÇÕES */
+.nome {
+    grid-column: span 6;
+}
+
+.cpf,
+.fax,
+.website {
+    grid-column: span 2;
+}
+
+.telefone,
+.estado {
+    grid-column: span 3;
+}
+
+.endereco {
+    grid-column: span 3;
+}
+
+.cep,
+.numero,
+.uf {
+    grid-column: span 1;
+}
+
+.empresa,
+.cidade {
+    grid-column: span 3;
+}
+
+.cargo,
+.contato {
+    grid-column: span 2;
+}
+
+.email,
+.inscricao {
+    grid-column: span 3;
+}
+
+.isento {
+    grid-column: 4 / span 3;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: -6px;
+}
+
+.isento input {
+    margin: 0;
+}
+
+/* BOTÕES */
+.botoes-fornecedor {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    margin-top: auto;
+    padding-top: 20px;
+}
+
+.botoes-fornecedor button {
+    height: 24px;
+    border: 1px solid #555;
+    border-radius: 7px;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.btn-cancelar {
+    color: white;
+    background-color:var(--secundario);
+}
+
+.btn-editar {
+    color: #111;
+    background-color: #f1f1f6;
+}
+
+.btn-salvar {
+    color: #111;
+    background-color: var(--primaria);
+}
+
+/* PAINEL DE PEDIDOS */
+.pedido-fornecedor {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    padding: 14px;
+    background-color: white;
+}
+
+/* CAMPOS DUPLOS NO PAINEL */
+.grupo-pedido {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+/* ADAPTAÇÃO PARA TELAS MENORES */
+@media (max-width: 900px) {
+    .fornecedores-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pedido-fornecedor {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

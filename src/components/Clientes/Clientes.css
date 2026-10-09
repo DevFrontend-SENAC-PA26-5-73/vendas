@@ -1,0 +1,81 @@
+.pagina-clientes {
+    width: 100%;
+    height: calc(100vh - 80px);
+    min-height: 500px;
+    margin: 0;
+    background-color: white;
+    border: 2px solid var(--c);
+    border-radius: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* Título da página */
+.clientes-cabecalho {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 8px;
+    background-color: var(--w);
+    border-bottom: 1px solid #eeeeee;
+    box-sizing: border-box;
+}
+
+.clientes-cabecalho h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 400;
+}
+
+/* Tabela */
+.tabela-clientes {
+    width: 100%;
+    background-color: var(--w);
+}
+
+.linha-titulos,
+.linha-cliente {
+    display: grid;
+    grid-template-columns: 2fr 0.8fr 0.9fr 2fr 0.7fr 1fr;
+    align-items: center;
+    gap: 18px;
+    padding: 0 12px;
+}
+
+.linha-titulos {
+    min-height: 28px;
+    background-color:var(--primaria);
+    font-family: "Arial", sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Linhas de preenchimento */
+.lista-clientes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 12px;
+}
+
+.linha-cliente {
+    padding: 0;
+}
+
+.linha-cliente input {
+    width: 100%;
+    min-width: 0;
+    height: 25px;
+    padding: 4px 6px;
+    background-color: #f1f1f6;
+    border: 1px solid #e8e8ee;
+    border-radius: 5px;
+    outline: none;
+    font-size: 10px;
+}
+
+.linha-cliente input:focus {
+    border-color: var(--c);
+    background-color: var(--w);
+}
