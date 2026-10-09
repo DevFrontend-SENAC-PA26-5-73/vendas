@@ -4,6 +4,7 @@ import Cabecalho from "./components/Cabecalho/Cabecalho";
 import MenuLateral from "./components/MenuLateral/MenuLateral";
 import Atendimento from "./components/Atendimento/Atendimento";
 import Dashboard from "./components/Dashboard/Dashboard";
+import Produtos from "./components/Produtos/Produto";
 
 function App() {
   return (
@@ -17,7 +18,7 @@ function App() {
       </aside>
 
       <main className="app-main">
-        <Dashboard />
+        <Produtos/>
       </main>
     </div>
   );
