@@ -1,7 +1,7 @@
 .menu-lateral{
     width: 240px;
     min-height: 100svh;
-    padding: 0 16px;
+    padding: 0 32px;
     box-sizing: border-box;
 
     display: flex;

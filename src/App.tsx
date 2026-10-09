@@ -1,13 +1,21 @@
-import Button from "./components/Button/Button";
-import Menu from "./pages/MenuGrid/Menu"; 
+import Button from "./components/Button/Button"; 
 import Cabecalho from "./components/Cabecalho/Cabecalho";
-import MenuButton from "./components/MenuButton/MenuButton";
+import MenuLateral from "./components/MenuLateral/MenuLateral";
+import "./App.css"
 
 function App() {
     return (<> 
-        <Cabecalho/>
+         <Cabecalho />
+
+            <div className="layout-principal">
+                <MenuLateral />
+
+                <main className="area-conteudo">
+                    
+                </main>
+            </div>
+        
     </>
     )
 }
-
 export default App;
