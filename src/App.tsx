@@ -1,13 +1,13 @@
-import './App.css';
-import MenuLateral from './components/MenuLateral/MenuLateral';
+import Button from "./components/Button/Button";
+import Menu from "./pages/MenuGrid/Menu"; 
+import Cabecalho from "./components/Cabecalho/Cabecalho";
+import MenuButton from "./components/MenuButton/MenuButton";
 
 function App() {
-  return (
-    <div>
-      <MenuLateral/>
-    </div>
-
-  )
+    return (<> 
+        <Cabecalho/>
+    </>
+    )
 }
 
 export default App;

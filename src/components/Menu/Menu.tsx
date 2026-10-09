@@ -4,8 +4,8 @@ import {
   CircleUserRound,
   LayoutDashboard,
   SquareMousePointer,
+  Box,  
   ArrowDownUp,
-  Box,
   CircleDollarSign,
   Settings,
 } from "lucide-react";
@@ -30,18 +30,7 @@ function Menu() {
 
       </div>
 
-      <div className="sidebar">
-        <House />
-        <ChartPie />
-        <CircleUserRound />
-        <LayoutDashboard />
-        <SquareMousePointer />
-        <ArrowDownUp />
-        <Box />
-        <CircleDollarSign />
-        <Settings />
-      </div>
-
+      
     </div>
   );
 }

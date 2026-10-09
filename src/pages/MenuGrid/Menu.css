@@ -1,0 +1,31 @@
+html,body{
+    margin: 0;
+    padding: 0;
+}
+.container{
+    display: grid;
+    grid-template-columns: 300px auto;
+    grid-template-rows: auto minmax(300px, auto) auto;
+    grid-template-areas:
+        "header header"
+        "aside main" 
+        "aside footer";
+     height: 100svh;   
+}
+.header{
+    grid-area: header;
+    background-color: rgb(6, 238, 161);
+
+}
+.aside{
+    grid-area:aside;
+    background-color: blue;
+}
+.main{
+    grid-area:main;
+    background-color: rgb(15, 221, 221);
+}
+footer{
+    grid-area: footer;
+    background-color: rgb(2, 90, 167);
+}
