@@ -1,21 +1,26 @@
-import Button from "./components/Button/Button"; 
+import "./App.css";
+
 import Cabecalho from "./components/Cabecalho/Cabecalho";
 import MenuLateral from "./components/MenuLateral/MenuLateral";
-import "./App.css"
+import Atendimento from "./components/Atendimento/Atendimento";
+import Dashboard from "./components/Dashboard/Dashboard";
 
 function App() {
-    return (<> 
-         <Cabecalho />
+  return (
+    <div className="app">
+      <header className="app-cabecalho">
+        <Cabecalho />
+      </header>
 
-            <div className="layout-principal">
-                <MenuLateral />
+      <aside className="app-menu">
+        <MenuLateral />
+      </aside>
 
-                <main className="area-conteudo">
-                    
-                </main>
-            </div>
-        
-    </>
-    )
+      <main className="app-main">
+        <Dashboard />
+      </main>
+    </div>
+  );
 }
+
 export default App;

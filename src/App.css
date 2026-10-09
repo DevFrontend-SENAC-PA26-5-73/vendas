@@ -1,22 +1,112 @@
-.app-layout{
-    display: flex;
-    min-height: 100svh;
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
 }
 
-.conteudo-principal{
-    display:flex ;
-    min-height: 100svh;
-    padding: 0;
-    background-color:(--w)
-}
-html, body, #root {
-    width: 100%;
-    min-height: 100%;
-    margin: 0;
-    padding: 0;
-    background-color: var(--c);
+.app {
+  width: 100%;
+  height: 100vh;
+
+  display: grid;
+
+  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-rows: 120px minmax(0, 1fr);
+
+  grid-template-areas:
+    "cabecalho cabecalho"
+    "menu main";
+
+  overflow: hidden;
+  background-color: var(--c);
 }
 
-body {
-    min-height: 100vh;
+/* Cabeçalho fixo na primeira linha */
+
+.app-cabecalho {
+  grid-area: cabecalho;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+
+  margin: 0;
+  padding: 0;
+
+  overflow: hidden;
+}
+
+.app-cabecalho > * {
+  width: 100%;
+  height: 100%;
+}
+
+/* Menu fixo abaixo do cabeçalho */
+
+.app-menu {
+  grid-area: menu;
+
+  min-width: 0;
+  min-height: 0;
+
+  margin: 0;
+  padding: 0;
+
+  overflow: hidden;
+  background-color: var(--w);
+}
+
+.app-menu > * {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+/* Somente esta área possui rolagem */
+
+.app-main {
+  grid-area: main;
+
+  min-width: 0;
+  min-height: 0;
+
+  margin: 0;
+  padding: 32px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  background-color: var(--c);
+}
+
+/* Barra de rolagem do conteúdo */
+
+.app-main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-main::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.app-main::-webkit-scrollbar-thumb {
+  background-color: #c9c9cf;
+  border-radius: 10px;
+}
+
+.app-main::-webkit-scrollbar-thumb:hover {
+  background-color: #ababaf;
+}
+
+@media (max-width: 1100px) {
+  .app {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .app-main {
+    padding: 24px;
+  }
 }

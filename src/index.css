@@ -18,6 +18,10 @@
   --weight-bold: 800;
 
 
+body{
+  background-color: var(--c);
+}
+
   /*Formatação dos textos*/
 }
 

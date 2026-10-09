@@ -1,0 +1,145 @@
+.atendimento {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+
+  display: grid;
+  grid-template-columns:
+    minmax(0, 2.5fr)
+    minmax(280px, 1fr);
+
+  align-items: stretch;
+  gap: 24px;
+}
+
+/* Cards */
+
+.atendimento-card {
+  min-width: 0;
+  margin: 0;
+  padding: 24px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  background-color: var(--w);
+  border-radius: 12px;
+}
+
+/* Linhas dos campos */
+
+.atendimento-linha {
+  width: 100%;
+
+  display: grid;
+  gap: 24px;
+}
+
+.atendimento-duas-colunas {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.atendimento-tres-colunas {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.atendimento-endereco {
+  grid-template-columns:
+    minmax(160px, 1fr)
+    minmax(180px, 1fr)
+    100px;
+}
+
+/* Título da seção */
+
+.atendimento-titulo {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--c);
+}
+
+.atendimento-titulo h2 {
+  margin: 0;
+  color: var(--b);
+}
+
+/* Área geral dos botões */
+
+.atendimento-acoes {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+/*
+  Botões do cliente:
+  Cancelar à esquerda,
+  Editar no centro exato,
+  Salvar à direita.
+*/
+
+.atendimento-acoes-cliente {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  gap: 16px;
+}
+
+.acao-esquerda {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.acao-centro {
+  display: flex;
+  justify-content: center;
+}
+
+.acao-direita {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Botões do pedido */
+
+.atendimento-acoes-pedido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Responsividade */
+
+@media (max-width: 1100px) {
+  .atendimento {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .atendimento-duas-colunas,
+  .atendimento-tres-colunas,
+  .atendimento-endereco {
+    grid-template-columns: 1fr;
+  }
+
+  .atendimento-card {
+    padding: 20px;
+  }
+
+  .atendimento-acoes-cliente {
+    grid-template-columns: 1fr;
+  }
+
+  .acao-esquerda,
+  .acao-centro,
+  .acao-direita {
+    justify-content: center;
+  }
+
+  .atendimento-acoes-pedido {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
