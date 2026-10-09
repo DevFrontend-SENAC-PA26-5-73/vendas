@@ -1,14 +1,60 @@
+import {useState} from 'react';
+import './MenuLateral.css';
 
-import './MenuLateral.css'; // Certifique-se de que o nome do CSS está correto aqui
-import MenuButton from '../MenuButton/MenuButton';
+const gruposMenu = [
+    {
+        titulo: "Menu",
+        itens: ["DashBoard", "Atendimento"],
+    },
 
-function MenuLateral(){
+    {
+        titulo: "Cadastro",
+        itens: ["Clientes", "Fornecedores", "Produtos"],
+    },
+
+    {
+        titulo: "Estoque",
+        itens: ["Movimentação", "Inventário"],
+    },
+
+    {
+        titulo: "Fluxo",
+        itens: ["DashBard"]
+    },
+];
+
+function MenuLateral() {
+    const [paginaAtiva, setPaginaAtiva] = useState("DashBoard");
 
     return(
-        <div className='sidebar'>
-            <div className='tag'>Bom dia</div>
-            <div className=''
-        </div>
+        <aside className='menu-lateral'>
+            <h2 className='menu-logo'></h2>
+
+            <nav className='menu-navegacao'>
+                {gruposMenu.map((grupo) => (
+                    <section className='menu-grupo' key={grupo.titulo}>
+                        <h3 
+                        className='menu-titulo-grupo'>{grupo.titulo}
+                        </h3>
+
+                        <div className='menu-grupo-itens medium-h3'>  {grupo.itens.map((item) => (
+                            <a 
+                            key={item}
+                            href='#'
+                            className={`menu-item ${paginaAtiva === item ? "ativo" : ""}`}
+                            onClick={(evento) => {
+                                evento.preventDefault();
+                                setPaginaAtiva(item);
+                            }}
+                            >
+                                {item}
+                            </a>
+                        ))}
+                        </div>
+                    </section>
+                ))}
+            </nav>
+        </aside>
     )
 }
 

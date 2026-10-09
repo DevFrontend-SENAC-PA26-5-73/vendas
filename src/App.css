@@ -1,0 +1,11 @@
+.app-layout{
+    display: flex;
+    min-height: 100svh;
+}
+
+.conteudo-principal{
+    flex: 1;
+    min-height: 100svh;
+    padding: 32px0;
+    background-color: pink;
+}
