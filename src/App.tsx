@@ -6,7 +6,6 @@ import Atendimento from "./components/Atendimento/Atendimento";
 import Dashboard from "./components/Dashboard/Dashboard";
 import Produtos from "./components/Produtos/Produto";
 import Clientes from "./components/Clientes/Clientes";
-import Fornecedores from "./components/Fornecedores/Fornecedores";
 import "./App.css"
 
 function App() {
@@ -22,6 +21,9 @@ function App() {
 
       <main className="app-main">
         <Produtos/>
+        <Atendimento/>
+        <Dashboard/>
+        <Clientes/>
       </main>
     </div>
   );
