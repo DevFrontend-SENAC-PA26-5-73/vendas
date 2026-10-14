@@ -1,145 +1,512 @@
-.atendimento {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-
-  display: grid;
-  grid-template-columns:
-    minmax(0, 2.5fr)
-    minmax(280px, 1fr);
-
-  align-items: stretch;
-  gap: 24px;
+.atendimento,
+.atendimento * {
+  box-sizing: border-box;
 }
 
-/* Cards */
-
-.atendimento-card {
+.atendimento {
+  width: 100%;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.atendimento-principal {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+
   margin: 0;
   padding: 24px;
 
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 0;
 
   background-color: var(--w);
   border-radius: 12px;
 }
 
-/* Linhas dos campos */
+/* ========================================
+   CABEÇALHO
+======================================== */
 
-.atendimento-linha {
-  width: 100%;
+.atendimento-cabecalho {
+  padding-bottom: 20px;
 
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 24px;
-}
 
-.atendimento-duas-colunas {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.atendimento-tres-colunas {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.atendimento-endereco {
-  grid-template-columns:
-    minmax(160px, 1fr)
-    minmax(180px, 1fr)
-    100px;
-}
-
-/* Título da seção */
-
-.atendimento-titulo {
-  padding-bottom: 16px;
   border-bottom: 1px solid var(--c);
 }
 
-.atendimento-titulo h2 {
+.atendimento-cabecalho h1,
+.atendimento-cabecalho p {
   margin: 0;
   color: var(--b);
 }
 
-/* Área geral dos botões */
-
-.atendimento-acoes {
-  width: 100%;
-  margin-top: auto;
-  padding-top: 8px;
+.atendimento-cabecalho p {
+  margin-top: 6px;
 }
 
-/*
-  Botões do cliente:
-  Cancelar à esquerda,
-  Editar no centro exato,
-  Salvar à direita.
-*/
+.atendimento-status {
+  padding: 8px 16px;
 
-.atendimento-acoes-cliente {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  align-items: center;
+  color: var(--b);
+  background-color: var(--primaria);
+
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ========================================
+   SEÇÕES
+======================================== */
+
+.atendimento-secao {
+  padding: 22px 0;
+
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+
+  border-bottom: 1px solid var(--c);
 }
 
-.acao-esquerda {
-  display: flex;
-  justify-content: flex-start;
+.atendimento-secao h2 {
+  margin: 0;
+  color: var(--b);
 }
 
-.acao-centro {
-  display: flex;
-  justify-content: center;
-}
-
-.acao-direita {
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* Botões do pedido */
-
-.atendimento-acoes-pedido {
+.atendimento-secao-topo {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 
-/* Responsividade */
+/* ========================================
+   GRIDS
+======================================== */
 
-@media (max-width: 1100px) {
-  .atendimento {
-    grid-template-columns: 1fr;
+.atendimento-grid {
+  width: 100%;
+
+  display: grid;
+  gap: 16px 20px;
+}
+
+/* Informações do pedido */
+
+.atendimento-grid-quatro {
+  grid-template-columns:
+    minmax(180px, 1.1fr)
+    minmax(160px, 1fr)
+    minmax(160px, 1fr)
+    minmax(200px, 1.3fr);
+}
+
+/* Informações do cliente */
+
+.atendimento-grid-cliente {
+  grid-template-columns:
+    minmax(260px, 1.5fr)
+    minmax(160px, 0.8fr)
+    minmax(180px, 1fr)
+    minmax(220px, 1.2fr);
+}
+
+.atendimento-grid-dois {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ========================================
+   CAMPOS
+======================================== */
+
+.atendimento-campo {
+  width: 100%;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.atendimento-campo label {
+  color: var(--b);
+}
+
+.atendimento-campo input,
+.atendimento-campo select,
+.atendimento-campo textarea,
+.atendimento-resumo-campo input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+
+  border: none;
+  border-radius: 6px;
+  outline: none;
+
+  color: var(--b);
+  background-color: var(--c);
+
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h3);
+}
+
+.atendimento-campo input,
+.atendimento-campo select,
+.atendimento-resumo-campo input {
+  height: 42px;
+  padding: 0 12px;
+}
+
+.atendimento-campo textarea {
+  min-height: 100px;
+  padding: 12px;
+
+  resize: vertical;
+}
+
+.atendimento-campo input::placeholder,
+.atendimento-campo textarea::placeholder {
+  color: #a2a2aa;
+}
+
+.atendimento-campo input:focus,
+.atendimento-campo select:focus,
+.atendimento-campo textarea:focus,
+.atendimento-resumo-campo input:focus {
+  background-color: var(--w);
+  box-shadow: 0 0 0 2px rgb(117 252 150 / 35%);
+}
+
+.atendimento-campo input[readonly] {
+  color: #73737c;
+  cursor: default;
+}
+
+/* ========================================
+   ADICIONAR PRODUTO
+======================================== */
+
+.atendimento-produto {
+  width: 100%;
+  padding: 18px;
+
+  display: grid;
+  grid-template-columns:
+    minmax(260px, 2fr)
+    minmax(110px, 0.8fr)
+    minmax(130px, 1fr)
+    minmax(90px, 0.65fr)
+    minmax(130px, 1fr)
+    110px;
+
+  align-items: end;
+  gap: 16px;
+
+  background-color: var(--c);
+  border-radius: 10px;
+}
+
+.atendimento-produto .atendimento-campo input,
+.atendimento-produto .atendimento-campo select {
+  background-color: var(--w);
+}
+
+.atendimento-adicionar {
+  width: 100%;
+  height: 42px;
+
+  border: none;
+  border-radius: 6px;
+
+  color: var(--b);
+  background-color: var(--primaria);
+
+  cursor: pointer;
+
+  transition:
+    filter 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.atendimento-adicionar:hover {
+  filter: brightness(0.95);
+}
+
+.atendimento-adicionar:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   TABELA DE ITENS
+======================================== */
+
+.atendimento-tabela-container {
+  width: 100%;
+
+  overflow-x: auto;
+
+  border: 1px solid var(--c);
+  border-radius: 8px;
+}
+
+.atendimento-tabela {
+  width: 100%;
+  min-width: 720px;
+
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  color: var(--b);
+}
+
+.atendimento-tabela th,
+.atendimento-tabela td {
+  padding: 13px 16px;
+
+  overflow: hidden;
+
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atendimento-tabela th:nth-child(1) {
+  width: 30%;
+}
+
+.atendimento-tabela th:nth-child(2) {
+  width: 15%;
+}
+
+.atendimento-tabela th:nth-child(3) {
+  width: 14%;
+}
+
+.atendimento-tabela th:nth-child(4) {
+  width: 18%;
+}
+
+.atendimento-tabela th:nth-child(5) {
+  width: 18%;
+}
+
+.atendimento-tabela th:last-child {
+  width: 50px;
+}
+
+.atendimento-tabela thead {
+  background-color: var(--primaria);
+}
+
+.atendimento-tabela tbody tr {
+  height: 48px;
+  border-bottom: 1px solid var(--c);
+}
+
+.atendimento-tabela tbody tr:last-child {
+  border-bottom: none;
+}
+
+.atendimento-tabela tbody tr:hover {
+  background-color: var(--c);
+}
+
+.atendimento-sem-itens {
+  height: 76px;
+
+  color: #9a9aa2;
+  text-align: center !important;
+}
+
+.atendimento-remover {
+  width: 30px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  border-radius: 6px;
+
+  color: var(--secundario);
+  background-color: transparent;
+
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.atendimento-remover:hover {
+  color: var(--w);
+  background-color: var(--secundario);
+}
+
+/* ========================================
+   PAGAMENTO E RESUMO
+======================================== */
+
+.atendimento-informacoes-finais {
+  padding: 22px 0;
+
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.6fr)
+    minmax(300px, 0.7fr);
+
+  align-items: stretch;
+  gap: 20px;
+
+  border-bottom: 1px solid var(--c);
+}
+
+.atendimento-pagamento {
+  padding: 20px;
+
+  background-color: var(--c);
+  border: none;
+  border-radius: 10px;
+}
+
+.atendimento-pagamento .atendimento-campo input,
+.atendimento-pagamento .atendimento-campo select,
+.atendimento-pagamento .atendimento-campo textarea {
+  background-color: var(--w);
+}
+
+/* Resumo */
+
+.atendimento-resumo {
+  padding: 20px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  color: var(--b);
+  background-color: var(--c);
+
+  border-radius: 10px;
+}
+
+.atendimento-resumo h2 {
+  margin: 0 0 4px;
+}
+
+.atendimento-resumo-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.atendimento-resumo-campo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  align-items: center;
+  gap: 16px;
+}
+
+.atendimento-resumo-campo input {
+  background-color: var(--w);
+}
+
+.atendimento-resumo-total {
+  margin-top: auto;
+  padding-top: 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  border-top: 1px solid #d8d8dd;
+}
+
+/* ========================================
+   BOTÕES FINAIS
+======================================== */
+
+.atendimento-acoes {
+  padding-top: 22px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.atendimento-acoes > div {
+  cursor: pointer;
+}
+
+/* ========================================
+   RESPONSIVIDADE
+======================================== */
+
+@media (max-width: 1250px) {
+  .atendimento-grid-quatro,
+  .atendimento-grid-cliente {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .atendimento-produto {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .atendimento-adicionar {
+    max-width: 180px;
   }
 }
 
-@media (max-width: 700px) {
-  .atendimento-duas-colunas,
-  .atendimento-tres-colunas,
-  .atendimento-endereco {
-    grid-template-columns: 1fr;
-  }
-
-  .atendimento-card {
+@media (max-width: 900px) {
+  .atendimento-principal {
     padding: 20px;
   }
 
-  .atendimento-acoes-cliente {
+  .atendimento-informacoes-finais {
     grid-template-columns: 1fr;
   }
 
-  .acao-esquerda,
-  .acao-centro,
-  .acao-direita {
-    justify-content: center;
+  .atendimento-produto {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .atendimento-principal {
+    padding: 16px;
   }
 
-  .atendimento-acoes-pedido {
-    flex-wrap: wrap;
-    justify-content: center;
+  .atendimento-cabecalho {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .atendimento-grid-quatro,
+  .atendimento-grid-cliente,
+  .atendimento-grid-dois,
+  .atendimento-produto {
+    grid-template-columns: 1fr;
+  }
+
+  .atendimento-adicionar {
+    max-width: none;
+  }
+
+  .atendimento-resumo-campo {
+    grid-template-columns: 1fr;
+  }
+
+  .atendimento-acoes {
+    flex-direction: column;
   }
 }

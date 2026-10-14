@@ -1,5 +1,36 @@
 import "./Dashboard.css";
 
+import Chart from 'react-apexcharts';
+
+function GraficoApex() {
+  const options = {
+    chart: { id: 'basic-bar' },
+    xaxis: { categories: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul"] },
+
+    colors: ["var(--primaria)"],
+
+    plotOptions: {
+      bar: {
+        columnWidth: "45%",
+        borderRadius: 6,
+        borderRadiusApplication: "end",
+      },
+    },
+  };
+
+  const series = [{
+    name: 'vendas',
+    data: [30, 40, 35, 50, 49, 60, 80]
+  }];
+
+  return (
+    <div>
+      <Chart options={options} series={series} type="bar" width="800px" />
+    </div>
+  );
+}
+
+
 type ResumoCardProps = {
   titulo: string;
   valor: string;
@@ -144,53 +175,9 @@ function Dashboard() {
               <option value="anual">Anual</option>
             </select>
           </div>
-
-          <div className="dashboard-grafico">
-            <div className="dashboard-grafico-valores">
-              <span className="light-h4">R$ 40 mil</span>
-              <span className="light-h4">R$ 30 mil</span>
-              <span className="light-h4">R$ 20 mil</span>
-              <span className="light-h4">R$ 10 mil</span>
-              <span className="light-h4">R$ 0</span>
-            </div>
-
-            <div className="dashboard-grafico-barras">
-              <div className="dashboard-coluna">
-                <span style={{ height: "42%" }} />
-                <small>Jan</small>
-              </div>
-
-              <div className="dashboard-coluna">
-                <span style={{ height: "58%" }} />
-                <small>Fev</small>
-              </div>
-
-              <div className="dashboard-coluna">
-                <span style={{ height: "48%" }} />
-                <small>Mar</small>
-              </div>
-
-              <div className="dashboard-coluna">
-                <span style={{ height: "72%" }} />
-                <small>Abr</small>
-              </div>
-
-              <div className="dashboard-coluna">
-                <span style={{ height: "63%" }} />
-                <small>Mai</small>
-              </div>
-
-              <div className="dashboard-coluna">
-                <span style={{ height: "84%" }} />
-                <small>Jun</small>
-              </div>
-
-              <div className="dashboard-coluna">
-                <span style={{ height: "70%" }} />
-                <small>Jul</small>
-              </div>
-            </div>
-          </div>
+          
+          <GraficoApex />
+          
         </article>
 
         {/* Origem dos contatos */}

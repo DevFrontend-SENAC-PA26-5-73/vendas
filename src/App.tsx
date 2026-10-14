@@ -20,10 +20,11 @@ function App() {
       </aside>
 
       <main className="app-main">
-        <Produtos/>
+        <Clientes/>
         <Atendimento/>
         <Dashboard/>
-        <Clientes/>
+        <Produtos/>
+
       </main>
     </div>
   );
