@@ -2,7 +2,7 @@ import Button from "./components/Button/Button";
 import Cabecalho from "./components/Cabecalho/Cabecalho";
 import MenuLateral from "./components/MenuLateral/MenuLateral";
 import Clientes from "./components/Clientes/Clientes";
-import Fornecedores from "./components/Fornecedores/Fornecedores";
+import FluxoCaixa from "./components/Fluxo de caixa/FluxoCaixa";
 import "./App.css"
 
 function App() {
@@ -13,7 +13,7 @@ function App() {
                 <MenuLateral />
 
                 <main className="area-conteudo">
-                  <Fornecedores/>
+                 <FluxoCaixa/>
                 </main>
             </div>
         
