@@ -6,7 +6,9 @@ import Atendimento from "./components/Atendimento/Atendimento";
 import Dashboard from "./components/Dashboard/Dashboard";
 import Produtos from "./components/Produtos/Produto";
 import Clientes from "./components/Clientes/Clientes";
+import Cargo from "./components/Cargo/Cargo";
 import "./App.css"
+import FluxoCaixa from "./components/Fluxo de caixa/FluxoCaixa";
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
         <Atendimento/>
         <Dashboard/>
         <Produtos/>
+        <FluxoCaixa/>
+        <Cargo/>
 
       </main>
     </div>

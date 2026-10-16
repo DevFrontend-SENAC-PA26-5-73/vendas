@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Pencil, Search, Trash2 } from "lucide-react";
 
 import Button from "../Button/Button";
-
 import "./Clientes.css";
 
 type Cliente = {
@@ -10,7 +9,11 @@ type Cliente = {
   cpf: string;
   nome: string;
   contato: string;
-  endereco: string;
+  rua: string;
+  numero: string;
+  complemento: string;
+  cidade: string;
+  estado: string;
   email: string;
 };
 
@@ -18,7 +21,11 @@ type FormularioCliente = {
   cpf: string;
   nome: string;
   contato: string;
-  endereco: string;
+  rua: string;
+  numero: string;
+  complemento: string;
+  cidade: string;
+  estado: string;
   email: string;
 };
 
@@ -26,9 +33,88 @@ const formularioInicial: FormularioCliente = {
   cpf: "",
   nome: "",
   contato: "",
-  endereco: "",
+  rua: "",
+  numero: "",
+  complemento: "",
+  cidade: "",
+  estado: "",
   email: "",
 };
+
+// Formata o CPF: 123.456.789-00
+function formatarCPF(valor: string): string {
+  return valor
+    .replace(/\D/g, "")
+    .slice(0, 11)
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1-$2");
+}
+
+// Formata o telefone: (11) 98765-4321
+function formatarContato(valor: string): string {
+  const numeros = valor.replace(/\D/g, "").slice(0, 11);
+
+  if (numeros.length === 0) return "";
+
+  if (numeros.length <= 2) {
+    return `(${numeros}`;
+  }
+
+  if (numeros.length <= 6) {
+    return `(${numeros.slice(0, 2)}) ${numeros.slice(2)}`;
+  }
+
+  if (numeros.length <= 10) {
+    return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 6)}-${numeros.slice(6)}`;
+  }
+
+  return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 7)}-${numeros.slice(7)}`;
+}
+
+// Permite apenas letras, acentos e espaços no nome
+function formatarNome(valor: string): string {
+  return valor.replace(/[^a-zA-ZÀ-ÿ\s]/g, "");
+}
+
+// Permite apenas letras, acentos e espaços na cidade
+function formatarCidade(valor: string): string {
+  return valor.replace(/[^a-zA-ZÀ-ÿ\s]/g, "");
+}
+
+// Permite apenas duas letras no estado
+function formatarEstado(valor: string): string {
+  return valor
+    .replace(/[^a-zA-Z]/g, "")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+// Monta o endereço completo para a tabela
+function montarEndereco(cliente: FormularioCliente): string {
+  const parteRua = cliente.numero
+    ? `${cliente.rua}, ${cliente.numero}`
+    : cliente.rua;
+
+  const partes = [
+    parteRua,
+    cliente.complemento,
+    cliente.cidade,
+    cliente.estado,
+  ].filter((parte) => parte.trim() !== "");
+
+  if (cliente.cidade && cliente.estado) {
+    return [
+      parteRua,
+      cliente.complemento,
+      `${cliente.cidade}/${cliente.estado}`,
+    ]
+      .filter((parte) => parte.trim() !== "")
+      .join(" - ");
+  }
+
+  return partes.join(" - ");
+}
 
 const clientesIniciais: Cliente[] = [
   {
@@ -36,7 +122,11 @@ const clientesIniciais: Cliente[] = [
     cpf: "123.456.789-00",
     nome: "Maria Silva",
     contato: "(11) 98765-4321",
-    endereco: "Rua das Flores, 123 - São Paulo/SP",
+    rua: "Rua das Flores",
+    numero: "123",
+    complemento: "Apto 101",
+    cidade: "São Paulo",
+    estado: "SP",
     email: "maria.silva@email.com",
   },
   {
@@ -44,7 +134,11 @@ const clientesIniciais: Cliente[] = [
     cpf: "987.654.321-00",
     nome: "João da Silva",
     contato: "(91) 98888-7777",
-    endereco: "Av. Barão do Rio Branco, 245 - Castanhal/PA",
+    rua: "Av. Barão do Rio Branco",
+    numero: "245",
+    complemento: "",
+    cidade: "Castanhal",
+    estado: "PA",
     email: "joao.silva@email.com",
   },
   {
@@ -52,7 +146,11 @@ const clientesIniciais: Cliente[] = [
     cpf: "456.789.123-10",
     nome: "Carlos Oliveira",
     contato: "(91) 97777-6666",
-    endereco: "Travessa Primeiro de Maio, 400 - Castanhal/PA",
+    rua: "Travessa Primeiro de Maio",
+    numero: "400",
+    complemento: "",
+    cidade: "Castanhal",
+    estado: "PA",
     email: "carlos.oliveira@email.com",
   },
 ];
@@ -76,11 +174,13 @@ function Clientes() {
     }
 
     return clientes.filter((cliente) => {
+      const endereco = montarEndereco(cliente).toLowerCase();
+
       return (
         cliente.nome.toLowerCase().includes(termo) ||
-        cliente.cpf.toLowerCase().includes(termo) ||
-        cliente.contato.toLowerCase().includes(termo) ||
-        cliente.endereco.toLowerCase().includes(termo) ||
+        cliente.cpf.includes(termo) ||
+        cliente.contato.includes(termo) ||
+        endereco.includes(termo) ||
         cliente.email.toLowerCase().includes(termo)
       );
     });
@@ -92,7 +192,7 @@ function Clientes() {
   ) {
     setFormulario((dadosAtuais) => ({
       ...dadosAtuais,
-      valor,
+      [campo]: valor,
     }));
   }
 
@@ -102,15 +202,46 @@ function Clientes() {
   }
 
   function salvarCliente() {
+    // Verifica se todos os campos obrigatórios foram preenchidos
     const camposPreenchidos =
-      formulario.nome.trim() &&
       formulario.cpf.trim() &&
+      formulario.nome.trim() &&
       formulario.contato.trim() &&
-      formulario.endereco.trim() &&
+      formulario.rua.trim() &&
+      formulario.numero.trim() &&
+      formulario.cidade.trim() &&
+      formulario.estado.trim() &&
       formulario.email.trim();
 
     if (!camposPreenchidos) {
-      alert("Preencha todos os campos do cliente.");
+      alert("Preencha todos os campos obrigatórios.");
+      return;
+    }
+
+    // Verifica se o CPF possui 11 números
+    if (formulario.cpf.replace(/\D/g, "").length !== 11) {
+      alert("Digite um CPF com 11 números.");
+      return;
+    }
+
+    // Verifica se o contato possui 10 ou 11 números
+    const numerosContato = formulario.contato.replace(/\D/g, "");
+
+    if (
+      numerosContato.length !== 10 &&
+      numerosContato.length !== 11
+    ) {
+      alert("Digite um telefone válido com DDD.");
+      return;
+    }
+
+    // Verifica se o e-mail tem um formato válido
+    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      formulario.email.trim()
+    );
+
+    if (!emailValido) {
+      alert("Digite um e-mail válido. Exemplo: nome@email.com");
       return;
     }
 
@@ -119,7 +250,7 @@ function Clientes() {
         clientesAtuais.map((cliente) =>
           cliente.id === clienteEmEdicao
             ? {
-                ...cliente,
+                id: cliente.id,
                 ...formulario,
               }
             : cliente
@@ -148,7 +279,11 @@ function Clientes() {
       cpf: cliente.cpf,
       nome: cliente.nome,
       contato: cliente.contato,
-      endereco: cliente.endereco,
+      rua: cliente.rua,
+      numero: cliente.numero,
+      complemento: cliente.complemento,
+      cidade: cliente.cidade,
+      estado: cliente.estado,
       email: cliente.email,
     });
 
@@ -170,8 +305,8 @@ function Clientes() {
   return (
     <section className="pagina-clientes">
       <div className="clientes-cadastro">
-        <header className="clientes-cabecalho">
-          <div>
+    <header className="clientes-cabecalho">
+      <div>
             <h1 className="medium-h1">
               {clienteEmEdicao !== null
                 ? "Editar cliente"
@@ -183,101 +318,192 @@ function Clientes() {
             </p>
           </div>
 
-          <span className="clientes-status medium-h3">
+       <span className="clientes-status medium-h3">
             {clienteEmEdicao !== null
               ? "Em edição"
               : "Novo cliente"}
-          </span>
+        </span>
         </header>
 
         <div className="clientes-formulario">
+          {/* Nome */}
           <div className="cliente-campo cliente-campo-nome">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-nome"
-            >
+            <label className="medium-h3" htmlFor="cliente-nome">
               Nome completo
             </label>
 
-            <input
+          <input
               id="cliente-nome"
               type="text"
               placeholder="Ex: Maria Silva"
               value={formulario.nome}
               onChange={(evento) =>
-                alterarCampo("nome", evento.target.value)
+                alterarCampo(
+                  "nome",
+                  formatarNome(evento.target.value)
+                )
               }
+              autoComplete="name"
             />
           </div>
 
+          {/* CPF */}
           <div className="cliente-campo">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-cpf"
-            >
+            <label className="medium-h3" htmlFor="cliente-cpf">
               CPF
             </label>
 
-            <input
+         <input
               id="cliente-cpf"
               type="text"
-              placeholder="Ex: 123.456.789-00"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              maxLength={14}
               value={formulario.cpf}
               onChange={(evento) =>
-                alterarCampo("cpf", evento.target.value)
+                alterarCampo(
+                  "cpf",
+                  formatarCPF(evento.target.value)
+                )
               }
             />
           </div>
 
+          {/* Contato */}
           <div className="cliente-campo">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-contato"
-            >
+            <label className="medium-h3" htmlFor="cliente-contato">
               Contato
             </label>
 
             <input
               id="cliente-contato"
               type="tel"
-              placeholder="Ex: (11) 98765-4321"
+              inputMode="numeric"
+              autoComplete="tel"
+              placeholder="(11) 98765-4321"
+              maxLength={15}
               value={formulario.contato}
               onChange={(evento) =>
-                alterarCampo("contato", evento.target.value)
+                alterarCampo(
+                  "contato",
+                  formatarContato(evento.target.value)
+                )
               }
             />
           </div>
 
+          {/* Rua */}
           <div className="cliente-campo cliente-campo-endereco">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-endereco"
-            >
-              Endereço
+            <label className="medium-h3" htmlFor="cliente-rua">
+              Rua
             </label>
 
             <input
-              id="cliente-endereco"
+              id="cliente-rua"
               type="text"
-              placeholder="Ex: Rua das Flores, 123 - São Paulo/SP"
-              value={formulario.endereco}
+              placeholder="Ex: Rua das Flores"
+              autoComplete="address-line1"
+              value={formulario.rua}
               onChange={(evento) =>
-                alterarCampo("endereco", evento.target.value)
+                alterarCampo("rua", evento.target.value)
               }
             />
           </div>
 
-          <div className="cliente-campo cliente-campo-email">
-            <label
+          {/* Número */}
+          <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="cliente-numero">
+              Número
+            </label>
+
+            <input
+              id="cliente-numero"
+              type="text"
+              inputMode="numeric"
+              placeholder="Ex: 123"
+              value={formulario.numero}
+              onChange={(evento) =>
+                alterarCampo(
+                  "numero",
+                  evento.target.value.replace(/\D/g, "").slice(0, 10)
+                )
+              }
+            />
+          </div>
+
+          {/* Complemento */}
+     <div className="cliente-campo">
+     <label
               className="medium-h3"
-              htmlFor="cliente-email"
+              htmlFor="cliente-complemento"
             >
+              Complemento
+      </label>
+
+             <input
+              id="cliente-complemento"
+              type="text"
+              placeholder="Ex: Apto 101"
+              value={formulario.complemento}
+              onChange={(evento) =>
+                alterarCampo("complemento", evento.target.value)
+              }
+            />
+      </div>
+
+          {/* Cidade */}
+      <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="cliente-cidade">
+              Cidade
+            </label>
+
+            <input
+              id="cliente-cidade"
+              type="text"
+              placeholder="Ex: São Paulo"
+              autoComplete="address-level2"
+              value={formulario.cidade}
+              onChange={(evento) =>
+               alterarCampo(
+                 "cidade",
+                formatarCidade(evento.target.value)
+                )
+              }
+            />
+          </div>
+
+          {/* Estado */}
+          <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="cliente-estado">
+              Estado
+            </label>
+
+            <input
+              id="cliente-estado"
+              type="text"
+              placeholder="Ex: SP"
+              maxLength={2}
+              autoComplete="address-level1"
+              value={formulario.estado}
+              onChange={(evento) =>
+                alterarCampo(
+                  "estado",
+                  formatarEstado(evento.target.value)
+                )
+              }
+            />
+          </div>
+
+          {/* E-mail */}
+          <div className="cliente-campo cliente-campo-email">
+            <label className="medium-h3" htmlFor="cliente-email">
               E-mail
             </label>
 
             <input
               id="cliente-email"
               type="email"
+              autoComplete="email"
               placeholder="Ex: maria.silva@email.com"
               value={formulario.email}
               onChange={(evento) =>
@@ -289,10 +515,7 @@ function Clientes() {
 
         <div className="clientes-acoes">
           <div onClick={limparFormulario}>
-            <Button
-              texto="Cancelar"
-              cor="btn-secundaria"
-            />
+            <Button texto="Cancelar" cor="btn-secundaria" />
           </div>
 
           <div onClick={salvarCliente}>
@@ -353,59 +576,55 @@ function Clientes() {
               </tr>
             </thead>
 
-            <tbody>
-              {clientesFiltrados.length === 0 ? (
-                <tr>
-                  <td
-                    className="clientes-sem-resultados light-h3"
-                    colSpan={6}
+         <tbody>
+          {clientesFiltrados.length === 0 ? (
+            <tr>
+            <td
+                className="clientes-sem-resultados light-h3"
+                 colSpan={6}
                   >
-                    Nenhum cliente encontrado.
-                  </td>
-                </tr>
+        Nenhum cliente encontrado.
+          </td>
+         </tr>
               ) : (
-                clientesFiltrados.map((cliente) => (
-                  <tr key={cliente.id}>
-                    <td className="medium-h3">
+          clientesFiltrados.map((cliente) => (
+            <tr key={cliente.id}>
+            <td className="medium-h3">
                       {cliente.nome}
-                    </td>
+            </td>
 
-                    <td className="light-h3">
+             <td className="light-h3">
                       {cliente.cpf}
-                    </td>
+            </td>
 
-                    <td className="light-h3">
+              <td className="light-h3">
                       {cliente.contato}
                     </td>
 
-                    <td className="light-h3">
-                      {cliente.endereco}
-                    </td>
+                <td className="light-h3">
+                      {montarEndereco(cliente)}
+                </td>
 
-                    <td className="light-h3">
+                <td className="light-h3">
                       {cliente.email}
-                    </td>
+                </td>
 
-                    <td>
-                      <div className="clientes-acoes-linha">
-                        <button
-                          type="button"
-                          className="cliente-acao cliente-editar"
-                          onClick={() =>
-                            editarCliente(cliente)
-                          }
-                          aria-label={`Editar ${cliente.nome}`}
-                          title="Editar cliente"
+                 <td>
+                  <div className="clientes-acoes-linha">
+                    <button
+                      type="button"
+                       className="cliente-acao cliente-editar"
+                       onClick={() => editarCliente(cliente)}
+                      aria-label={`Editar ${cliente.nome}`}
+                      title="Editar cliente"
                         >
-                          <Pencil size={16} />
-                        </button>
+                      <Pencil size={16} />
+                      </button>
 
-                        <button
+                      <button
                           type="button"
                           className="cliente-acao cliente-excluir"
-                          onClick={() =>
-                            excluirCliente(cliente.id)
-                          }
+                          onClick={() => excluirCliente(cliente.id)}
                           aria-label={`Excluir ${cliente.nome}`}
                           title="Excluir cliente"
                         >

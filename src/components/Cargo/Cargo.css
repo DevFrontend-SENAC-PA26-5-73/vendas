@@ -1,0 +1,135 @@
+.pagina-cargo {
+  width: 100%;
+  min-height: 300px;
+  padding: 26px 22px;
+  box-sizing: border-box;
+  background-color: #ffffff;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cargo-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #eeeeee;
+}
+
+.cargo-cabecalho h2 {
+  margin: 0;
+  color: #222222;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.cargo-cabecalho p {
+  margin: 7px 0 0;
+  color: #b5b5b5;
+  font-size: 12px;
+}
+
+.cargo-status {
+  padding: 9px 16px;
+  border-radius: 20px;
+  background-color: #70f994;
+  color: #111111;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cargo-formulario {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.cargo-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 22px;
+}
+
+.cargo-campo label {
+  color: #222222;
+  font-size: 13px;
+}
+
+.cargo-campo select {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background-color: #f1f1f6;
+  color: #333333;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.cargo-campo select:focus {
+  background-color: #ffffff;
+  border-color: #70f994;
+}
+
+.cargo-acoes {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 22px;
+  border-top: 1px solid #eeeeee;
+}
+
+.cargo-acoes button {
+  min-width: 120px;
+  height: 48px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cargo-botao-cancelar {
+  background-color: #d93618;
+  color: #ffffff;
+}
+
+.cargo-botao-cancelar:hover {
+  background-color: #bd2c13;
+}
+
+.cargo-botao-salvar {
+  background-color: #70f994;
+  color: #111111;
+}
+
+.cargo-botao-salvar:hover {
+  background-color: #48e879;
+}
+
+@media (max-width: 600px) {
+  .pagina-cargo {
+    padding: 18px 14px;
+  }
+
+  .cargo-cabecalho {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cargo-acoes button {
+    min-width: 100px;
+  }
+}
