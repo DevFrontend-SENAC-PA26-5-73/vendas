@@ -92,7 +92,7 @@ function Clientes() {
   ) {
     setFormulario((dadosAtuais) => ({
       ...dadosAtuais,
-      valor,
+      [campo]: valor,
     }));
   }
 
