@@ -1,14 +1,7 @@
-import { useState } from "react";
-import type { ChangeEvent } from "react";
-
 import CaixaDeTexto from "../CaixaDeTexto/CaixaDeTexto";
 import Button from "../Button/Button";
 
 import "./Produtos.css";
-
-type ImagemProdutoProps = {
-  titulo: string;
-};
 
 type ProdutoTabela = {
   id: number;
@@ -18,49 +11,6 @@ type ProdutoTabela = {
   descricao: string;
   valor: string;
 };
-
-function ImagemProduto({ titulo }: ImagemProdutoProps) {
-  const [imagem, setImagem] = useState<string | null>(null);
-
-  function selecionarImagem(evento: ChangeEvent<HTMLInputElement>) {
-    const arquivo = evento.target.files?.[0];
-
-    if (!arquivo) {
-      return;
-    }
-
-    const enderecoImagem = URL.createObjectURL(arquivo);
-    setImagem(enderecoImagem);
-  }
-
-  return (
-    <div className="produto-imagem-grupo">
-      <span className="medium-h3">
-        {titulo}
-      </span>
-
-      <label className="produto-imagem-caixa">
-        {imagem ? (
-          {imagem}
-        ) : (
-          <span className="produto-imagem-icone">
-            +
-          </span>
-        )}
-
-        <input
-          type="file"
-          accept="image/*"
-          onChange={selecionarImagem}
-        />
-      </label>
-
-      <span className="light-h3">
-        Inserir produto
-      </span>
-    </div>
-  );
-}
 
 function Produtos() {
   const produtos: ProdutoTabela[] = [
@@ -110,59 +60,76 @@ function Produtos() {
     <section className="produtos">
       <div className="produtos-cadastro">
         <div className="produtos-cabecalho">
-          <h1 className="medium-h2">
-            Cadastro de produto
-          </h1>
+          <div>
+            <h1 className="medium-h1">
+              Cadastro de produto
+            </h1>
+
+            <p className="light-h3">
+              Preencha as informações para cadastrar um produto.
+            </p>
+          </div>
+
+          <span className="produtos-status medium-h3">
+            Novo produto
+          </span>
         </div>
 
         <div className="produtos-formulario">
-          <div className="produtos-campos">
-            <CaixaDeTexto titulo="Nome do produto" />
+          <CaixaDeTexto titulo="Nome do produto" />
 
+          <CaixaDeTexto titulo="Código" />
+
+          <CaixaDeTexto titulo="Categoria" />
+
+          <CaixaDeTexto
+            titulo="Quantidade"
+            type="number"
+          />
+
+          <div className="produto-campo-descricao">
             <CaixaDeTexto titulo="Descrição do produto" />
-
-            <div className="produtos-campos-menores">
-              <CaixaDeTexto titulo="Código" />
-
-              <CaixaDeTexto titulo="Categoria" />
-            </div>
-
-            <CaixaDeTexto
-              titulo="Valor"
-              type="number"
-            />
           </div>
 
-          <div className="produtos-imagens">
-            <ImagemProduto titulo="Imagem principal" />
-
-            <ImagemProduto titulo="Imagem secundária" />
-          </div>
+          <CaixaDeTexto
+            titulo="Valor"
+            type="number"
+          />
         </div>
 
         <div className="produtos-acoes">
-          <Button
-            texto="Cancelar"
-            cor="btn-secundaria"
-          />
+          <div className="produto-acao-esquerda">
+            <Button
+              texto="Cancelar"
+              cor="btn-secundaria"
+            />
+          </div>
 
-          <Button
-            texto="Editar"
-            cor="btn-c"
-          />
+          <div className="produto-acao-centro">
+            <Button
+              texto="Editar"
+              cor="btn-c"
+            />
+          </div>
 
-          <Button
-            texto="Salvar"
-            cor="btn-primaria"
-          />
+          <div className="produto-acao-direita">
+            <Button
+              texto="Salvar"
+              cor="btn-primaria"
+            />
+          </div>
         </div>
       </div>
 
       <div className="produtos-listagem">
         <div className="produtos-listagem-titulo">
-          <h2 className="medium-h2">
+          <h2 className="medium-h1">
             Produtos cadastrados
           </h2>
+
+          <p className="light-h3">
+            Consulte os produtos existentes no sistema.
+          </p>
         </div>
 
         <div className="produtos-tabela-container">
