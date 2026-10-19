@@ -54,6 +54,8 @@ function Produtos() {
 
           <CaixaDeTexto titulo="Quantidade" type="number" />
 
+          <CaixaDeTexto titulo="Empresa" />
+
           <div className="produto-campo-descricao">
             <CaixaDeTexto titulo="Descrição do produto" />
           </div>
@@ -91,11 +93,13 @@ function Produtos() {
           <table className="produtos-tabela">
             <thead>
               <tr>
+                <th className="medium-h3">Código de barra</th>
                 <th className="medium-h3">Nome do produto</th>
-                <th className="medium-h3">Código</th>
+                <th className="medium-h3">Categoria</th>
                 <th className="medium-h3">Empresa</th>
                 <th className="medium-h3">Descrição</th>
                 <th className="medium-h3">Valor</th>
+                <th className="medium-h3">Estoque</th>
               </tr>
             </thead>
 
@@ -103,11 +107,11 @@ function Produtos() {
               {produtos.map((produto) => (
                 <tr key={produto.id}>
                   <td className="light-h3">
-                    {produto.nome}
+                    {produto.id}
                   </td>
 
                   <td className="light-h3">
-                    {produto.id}
+                    {produto.nome}
                   </td>
 
                   <td className="light-h3">
@@ -115,7 +119,11 @@ function Produtos() {
                   </td>
 
                   <td className="light-h3">
-                    {produto.quantidade}
+                    falta emplementar
+                  </td>
+
+                  <td className="light-h3">
+                    falta emplementar
                   </td>
 
                   <td className="medium-h3">
@@ -123,6 +131,10 @@ function Produtos() {
                       style: "currency",
                       currency: "BRL",
                     })}
+                  </td>
+
+                  <td className="light-h3">
+                    {produto.quantidade}
                   </td>
                 </tr>
               ))}
