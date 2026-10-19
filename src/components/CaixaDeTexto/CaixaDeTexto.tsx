@@ -31,6 +31,7 @@ function CaixaDeTexto({
     "Valor Total": "Ex: R$ 735,00",
     "Forma de Pagamento": "Ex: Pix",
     "Parcelamento": "Ex: 3x sem juros",
+    "Empresa": "Digite o nome da empresa "
   };
 
   return (

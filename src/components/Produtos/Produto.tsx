@@ -1,60 +1,30 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
+
 import CaixaDeTexto from "../CaixaDeTexto/CaixaDeTexto";
 import Button from "../Button/Button";
 
 import "./Produtos.css";
 
-type ProdutoTabela = {
+interface Iproduto {
   id: number;
   nome: string;
-  codigo: string;
-  empresa: string;
-  descricao: string;
-  valor: string;
-};
+  quantidade: number;
+  tipo: string;
+  preco: number;
+}
 
 function Produtos() {
-  const produtos: ProdutoTabela[] = [
-    {
-      id: 1,
-      nome: "Produto exemplo",
-      codigo: "PROD-001",
-      empresa: "Empresa Norte",
-      descricao: "Descrição do produto",
-      valor: "R$ 245,00",
-    },
-    {
-      id: 2,
-      nome: "Produto exemplo",
-      codigo: "PROD-002",
-      empresa: "Empresa Norte",
-      descricao: "Descrição do produto",
-      valor: "R$ 180,00",
-    },
-    {
-      id: 3,
-      nome: "Produto exemplo",
-      codigo: "PROD-003",
-      empresa: "Empresa Norte",
-      descricao: "Descrição do produto",
-      valor: "R$ 310,00",
-    },
-    {
-      id: 4,
-      nome: "Produto exemplo",
-      codigo: "PROD-004",
-      empresa: "Empresa Norte",
-      descricao: "Descrição do produto",
-      valor: "R$ 95,00",
-    },
-    {
-      id: 5,
-      nome: "Produto exemplo",
-      codigo: "PROD-005",
-      empresa: "Empresa Norte",
-      descricao: "Descrição do produto",
-      valor: "R$ 520,00",
-    },
-  ];
+  const [produtos, setProdutos] = useState<Iproduto[]>([]);
+
+  useEffect(() => {
+    axios
+      .get<Iproduto[]>("http://10.3.20.30:5001/produtos/")
+      .then((resposta) => {
+        console.log(resposta.data);
+        setProdutos(resposta.data);
+      });
+  }, []);
 
   return (
     <section className="produtos">
@@ -82,41 +52,28 @@ function Produtos() {
 
           <CaixaDeTexto titulo="Categoria" />
 
-          <CaixaDeTexto
-            titulo="Quantidade"
-            type="number"
-          />
+          <CaixaDeTexto titulo="Quantidade" type="number" />
+
+          <CaixaDeTexto titulo="Empresa" />
 
           <div className="produto-campo-descricao">
             <CaixaDeTexto titulo="Descrição do produto" />
           </div>
 
-          <CaixaDeTexto
-            titulo="Valor"
-            type="number"
-          />
+          <CaixaDeTexto titulo="Valor" type="number" />
         </div>
 
         <div className="produtos-acoes">
           <div className="produto-acao-esquerda">
-            <Button
-              texto="Cancelar"
-              cor="btn-secundaria"
-            />
+            <Button texto="Cancelar" cor="btn-secundaria" />
           </div>
 
           <div className="produto-acao-centro">
-            <Button
-              texto="Editar"
-              cor="btn-c"
-            />
+            <Button texto="Editar" cor="btn-c" />
           </div>
 
           <div className="produto-acao-direita">
-            <Button
-              texto="Salvar"
-              cor="btn-primaria"
-            />
+            <Button texto="Salvar" cor="btn-primaria" />
           </div>
         </div>
       </div>
@@ -136,25 +93,13 @@ function Produtos() {
           <table className="produtos-tabela">
             <thead>
               <tr>
-                <th className="medium-h3">
-                  Nome do produto
-                </th>
-
-                <th className="medium-h3">
-                  Código
-                </th>
-
-                <th className="medium-h3">
-                  Empresa
-                </th>
-
-                <th className="medium-h3">
-                  Descrição
-                </th>
-
-                <th className="medium-h3">
-                  Valor
-                </th>
+                <th className="medium-h3">Código de barra</th>
+                <th className="medium-h3">Nome do produto</th>
+                <th className="medium-h3">Categoria</th>
+                <th className="medium-h3">Empresa</th>
+                <th className="medium-h3">Descrição</th>
+                <th className="medium-h3">Valor</th>
+                <th className="medium-h3">Estoque</th>
               </tr>
             </thead>
 
@@ -162,23 +107,34 @@ function Produtos() {
               {produtos.map((produto) => (
                 <tr key={produto.id}>
                   <td className="light-h3">
+                    {produto.id}
+                  </td>
+
+                  <td className="light-h3">
                     {produto.nome}
                   </td>
 
                   <td className="light-h3">
-                    {produto.codigo}
+                    {produto.tipo}
                   </td>
 
                   <td className="light-h3">
-                    {produto.empresa}
+                    falta emplementar
                   </td>
 
                   <td className="light-h3">
-                    {produto.descricao}
+                    falta emplementar
                   </td>
 
                   <td className="medium-h3">
-                    {produto.valor}
+                    {produto.preco.toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    })}
+                  </td>
+
+                  <td className="light-h3">
+                    {produto.quantidade}
                   </td>
                 </tr>
               ))}
