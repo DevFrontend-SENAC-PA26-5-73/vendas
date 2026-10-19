@@ -1,10 +1,8 @@
 import { useState } from "react";
 
 import "./App.css";
-
 import Cabecalho from "./components/Cabecalho/Cabecalho";
 import MenuLateral from "./components/MenuLateral/MenuLateral";
-
 import Dashboard from "./components/Dashboard/Dashboard";
 import Atendimento from "./components/Atendimento/Atendimento";
 import Clientes from "./components/Clientes/Clientes";
