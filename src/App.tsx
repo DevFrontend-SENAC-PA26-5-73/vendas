@@ -1,4 +1,6 @@
 import { useState } from "react";
+import Cargo from "./components/Cargo/Cargo";
+import Funcionario from "./components/Funcionario/Funcionario";
 
 import "./App.css";
 import Cabecalho from "./components/Cabecalho/Cabecalho";
@@ -59,6 +61,12 @@ function App() {
         return (
           <FluxoCaixa/>
         );
+
+        case "Cargo":
+      return <Cargo />;
+
+      case "Funcionario":
+     return <Funcionario />;
 
       default:
         return <Dashboard />;

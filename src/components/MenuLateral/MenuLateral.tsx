@@ -7,7 +7,7 @@ const gruposMenu = [
   },
   {
     titulo: "Cadastro",
-    itens: ["Clientes", "Produtos"],
+    itens: ["Clientes", "Produtos", "Cargo"],
   },
   {
     titulo: "Estoque",
@@ -15,7 +15,7 @@ const gruposMenu = [
   },
   {
     titulo: "Fluxo",
-    itens: ["Fluxo de Caixa"],
+    itens: ["Fluxo de Caixa","Funcionario"],
   },
 ];
 
