@@ -11,11 +11,11 @@ import Produtos from "./components/Produtos/Produto";
 
 function App() {
   const [paginaAtiva, setPaginaAtiva] =
-    useState<string>("DashBoard");
+    useState<string>("Dashboard");
 
   function renderizarPagina() {
     switch (paginaAtiva) {
-      case "DashBoard":
+      case "Dashboard":
         return <Dashboard />;
 
       case "Atendimento":

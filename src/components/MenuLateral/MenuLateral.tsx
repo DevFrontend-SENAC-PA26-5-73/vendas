@@ -3,7 +3,7 @@ import "./MenuLateral.css";
 const gruposMenu = [
   {
     titulo: "Menu",
-    itens: ["DashBoard", "Atendimento"],
+    itens: ["Dashboard", "Atendimento"],
   },
   {
     titulo: "Cadastro",
