@@ -1,169 +1,242 @@
-import { useMemo, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { Pencil, Search, Trash2 } from "lucide-react";
 
 import Button from "../Button/Button";
-
 import "./Clientes.css";
 
-type Cliente = {
+interface ICliente {
   id: number;
   cpf: string;
   nome: string;
   contato: string;
-  endereco: string;
+  rua: string;
+  numero: number;
+  complemento: string | null;
+  cidade: string;
+  estado: string;
   email: string;
+}
+
+type FormularioCliente = Omit<ICliente, "id"> & {
+  complemento: string;
 };
 
-type FormularioCliente = {
-  cpf: string;
-  nome: string;
-  contato: string;
-  endereco: string;
-  email: string;
-};
+const API_URL = "https://vendas.gabrielpimentel.com.br/clientes";
 
 const formularioInicial: FormularioCliente = {
   cpf: "",
   nome: "",
   contato: "",
-  endereco: "",
+  rua: "",
+  numero: 0,
+  complemento: "",
+  cidade: "",
+  estado: "",
   email: "",
 };
 
-const clientesIniciais: Cliente[] = [
-  {
-    id: 1,
-    cpf: "123.456.789-00",
-    nome: "Maria Silva",
-    contato: "(11) 98765-4321",
-    endereco: "Rua das Flores, 123 - São Paulo/SP",
-    email: "maria.silva@email.com",
-  },
-  {
-    id: 2,
-    cpf: "987.654.321-00",
-    nome: "João da Silva",
-    contato: "(91) 98888-7777",
-    endereco: "Av. Barão do Rio Branco, 245 - Castanhal/PA",
-    email: "joao.silva@email.com",
-  },
-  {
-    id: 3,
-    cpf: "456.789.123-10",
-    nome: "Carlos Oliveira",
-    contato: "(91) 97777-6666",
-    endereco: "Travessa Primeiro de Maio, 400 - Castanhal/PA",
-    email: "carlos.oliveira@email.com",
-  },
-];
+function normalizarClientes(dados: unknown): ICliente[] {
+  if (!Array.isArray(dados)) {
+    return [];
+  }
+
+  return dados.map((item) => {
+    const cliente = item as ICliente;
+
+    return {
+      ...cliente,
+      complemento: cliente.complemento ?? "",
+    };
+  });
+}
 
 function Clientes() {
-  const [clientes, setClientes] =
-    useState<Cliente[]>(clientesIniciais);
-
+  const [clientes, setClientes] = useState<ICliente[]>([]);
   const [formulario, setFormulario] =
     useState<FormularioCliente>(formularioInicial);
-
   const [filtro, setFiltro] = useState("");
   const [clienteEmEdicao, setClienteEmEdicao] =
     useState<number | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
 
+  // GET: listar todos os clientes
+  async function buscarClientes() {
+    try {
+      setCarregando(true);
+
+      const resposta = await axios.get<unknown>(API_URL);
+
+      console.log("Clientes recebidos da API:", resposta.data);
+
+      setClientes(normalizarClientes(resposta.data));
+    } catch (erro) {
+      console.error("Erro ao buscar clientes:", erro);
+      setClientes([]);
+
+      alert("Não foi possível carregar os clientes.");
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  useEffect(() => {
+    void buscarClientes();
+  }, []);
+
+  // Pesquisa os clientes pelo nome, CPF, endereço e outros campos
   const clientesFiltrados = useMemo(() => {
+    const lista = Array.isArray(clientes) ? clientes : [];
     const termo = filtro.trim().toLowerCase();
 
     if (!termo) {
-      return clientes;
+      return lista;
     }
 
-    return clientes.filter((cliente) => {
-      return (
-        cliente.nome.toLowerCase().includes(termo) ||
-        cliente.cpf.toLowerCase().includes(termo) ||
-        cliente.contato.toLowerCase().includes(termo) ||
-        cliente.endereco.toLowerCase().includes(termo) ||
-        cliente.email.toLowerCase().includes(termo)
-      );
-    });
+    return lista.filter((cliente) =>
+      [
+        cliente.nome,
+        cliente.cpf,
+        cliente.contato,
+        cliente.rua,
+        cliente.numero,
+        cliente.complemento,
+        cliente.cidade,
+        cliente.estado,
+        cliente.email,
+      ].some((valor) =>
+        String(valor ?? "").toLowerCase().includes(termo)
+      )
+    );
   }, [clientes, filtro]);
 
+  // Atualiza os campos do formulário
   function alterarCampo(
     campo: keyof FormularioCliente,
     valor: string
   ) {
-    setFormulario((dadosAtuais) => ({
-      ...dadosAtuais,
-      [campo]: valor,
+    setFormulario((atual) => ({
+      ...atual,
+      [campo]: campo === "numero" ? Number(valor) : valor,
     }));
   }
 
+  // Limpa o formulário e sai do modo de edição
   function limparFormulario() {
-    setFormulario(formularioInicial);
+    setFormulario({ ...formularioInicial });
     setClienteEmEdicao(null);
   }
 
-  function salvarCliente() {
-    const camposPreenchidos =
-      formulario.nome.trim() &&
-      formulario.cpf.trim() &&
-      formulario.contato.trim() &&
-      formulario.endereco.trim() &&
-      formulario.email.trim();
+  // POST: cadastrar | PATCH: atualizar
+  async function salvarCliente() {
+    const obrigatorios = [
+      formulario.cpf,
+      formulario.nome,
+      formulario.contato,
+      formulario.rua,
+      formulario.cidade,
+      formulario.estado,
+      formulario.email,
+    ];
 
-    if (!camposPreenchidos) {
-      alert("Preencha todos os campos do cliente.");
+    if (
+      obrigatorios.some((campo) => !campo.trim()) ||
+      !Number.isInteger(formulario.numero) ||
+      formulario.numero <= 0
+    ) {
+      alert("Preencha corretamente os campos obrigatórios.");
       return;
     }
 
-    if (clienteEmEdicao !== null) {
-      setClientes((clientesAtuais) =>
-        clientesAtuais.map((cliente) =>
-          cliente.id === clienteEmEdicao
-            ? {
-                ...cliente,
-                ...formulario,
-              }
-            : cliente
-        )
-      );
+    try {
+      setSalvando(true);
+
+      if (clienteEmEdicao !== null) {
+        // Atualiza o cliente pelo ID
+        await axios.patch(
+          `${API_URL}/${clienteEmEdicao}`,
+          formulario
+        );
+      } else {
+        // Cadastra um novo cliente
+        await axios.post(API_URL, formulario);
+      }
+
+      const estavaEditando = clienteEmEdicao !== null;
 
       limparFormulario();
-      return;
+      await buscarClientes();
+
+      alert(
+        estavaEditando
+          ? "Cliente atualizado com sucesso!"
+          : "Cliente cadastrado com sucesso!"
+      );
+    } catch (erro) {
+      console.error("Erro ao salvar cliente:", erro);
+
+      if (axios.isAxiosError(erro) && erro.response?.status === 409) {
+        alert("Já existe um cliente cadastrado com esse CPF.");
+      } else if (
+        axios.isAxiosError(erro) &&
+        erro.response?.status === 400
+      ) {
+        alert("Confira os campos obrigatórios e tente novamente.");
+      } else {
+        alert(
+          "Não foi possível salvar o cliente. Confira o console."
+        );
+      }
+    } finally {
+      setSalvando(false);
     }
-
-    const novoCliente: Cliente = {
-      id: Date.now(),
-      ...formulario,
-    };
-
-    setClientes((clientesAtuais) => [
-      novoCliente,
-      ...clientesAtuais,
-    ]);
-
-    limparFormulario();
   }
 
-  function editarCliente(cliente: Cliente) {
+  // Preenche o formulário com os dados do cliente selecionado
+  function editarCliente(cliente: ICliente) {
     setFormulario({
       cpf: cliente.cpf,
       nome: cliente.nome,
       contato: cliente.contato,
-      endereco: cliente.endereco,
+      rua: cliente.rua,
+      numero: cliente.numero,
+      complemento: cliente.complemento ?? "",
+      cidade: cliente.cidade,
+      estado: cliente.estado,
       email: cliente.email,
     });
 
     setClienteEmEdicao(cliente.id);
   }
 
-  function excluirCliente(clienteId: number) {
-    setClientes((clientesAtuais) =>
-      clientesAtuais.filter(
-        (cliente) => cliente.id !== clienteId
-      )
+  // DELETE: excluir cliente pelo ID
+  async function excluirCliente(id: number) {
+    const confirmar = window.confirm(
+      "Deseja realmente excluir este cliente?"
     );
 
-    if (clienteEmEdicao === clienteId) {
-      limparFormulario();
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+
+      if (clienteEmEdicao === id) {
+        limparFormulario();
+      }
+
+      await buscarClientes();
+
+      alert("Cliente excluído com sucesso!");
+    } catch (erro) {
+      console.error("Erro ao excluir cliente:", erro);
+
+      alert(
+        "Não foi possível excluir o cliente. Confira o console."
+      );
     }
   }
 
@@ -179,110 +252,145 @@ function Clientes() {
             </h1>
 
             <p className="light-h3">
-              Preencha as informações para cadastrar um cliente.
+              Preencha as informações do cliente.
             </p>
           </div>
 
           <span className="clientes-status medium-h3">
-            {clienteEmEdicao !== null
-              ? "Em edição"
-              : "Novo cliente"}
+            {clienteEmEdicao !== null ? "Em edição" : "Novo cliente"}
           </span>
         </header>
 
         <div className="clientes-formulario">
-          <div className="cliente-campo cliente-campo-nome">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-nome"
-            >
+          <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="nome">
               Nome completo
             </label>
-
             <input
-              id="cliente-nome"
-              type="text"
-              placeholder="Ex: Maria Silva"
+              id="nome"
               value={formulario.nome}
-              onChange={(evento) =>
-                alterarCampo("nome", evento.target.value)
+              onChange={(e) =>
+                alterarCampo("nome", e.target.value)
               }
+              placeholder="Nome completo"
             />
           </div>
 
           <div className="cliente-campo">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-cpf"
-            >
+            <label className="medium-h3" htmlFor="cpf">
               CPF
             </label>
-
             <input
-              id="cliente-cpf"
-              type="text"
-              placeholder="Ex: 123.456.789-00"
+              id="cpf"
               value={formulario.cpf}
-              onChange={(evento) =>
-                alterarCampo("cpf", evento.target.value)
+              disabled={clienteEmEdicao !== null}
+              onChange={(e) =>
+                alterarCampo("cpf", e.target.value)
               }
+              placeholder="000.000.000-00"
             />
           </div>
 
           <div className="cliente-campo">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-contato"
-            >
+            <label className="medium-h3" htmlFor="contato">
               Contato
             </label>
-
             <input
-              id="cliente-contato"
+              id="contato"
               type="tel"
-              placeholder="Ex: (11) 98765-4321"
               value={formulario.contato}
-              onChange={(evento) =>
-                alterarCampo("contato", evento.target.value)
+              onChange={(e) =>
+                alterarCampo("contato", e.target.value)
               }
+              placeholder="(11) 98765-4321"
             />
           </div>
 
-          <div className="cliente-campo cliente-campo-endereco">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-endereco"
-            >
-              Endereço
+          <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="rua">
+              Rua
             </label>
-
             <input
-              id="cliente-endereco"
-              type="text"
-              placeholder="Ex: Rua das Flores, 123 - São Paulo/SP"
-              value={formulario.endereco}
-              onChange={(evento) =>
-                alterarCampo("endereco", evento.target.value)
+              id="rua"
+              value={formulario.rua}
+              onChange={(e) =>
+                alterarCampo("rua", e.target.value)
               }
+              placeholder="Rua das Flores"
+            />
+          </div>
+
+          <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="numero">
+              Número
+            </label>
+            <input
+              id="numero"
+              type="number"
+              min="1"
+              value={formulario.numero || ""}
+              onChange={(e) =>
+                alterarCampo("numero", e.target.value)
+              }
+              placeholder="123"
+            />
+          </div>
+
+          <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="complemento">
+              Complemento
+            </label>
+            <input
+              id="complemento"
+              value={formulario.complemento}
+              onChange={(e) =>
+                alterarCampo("complemento", e.target.value)
+              }
+              placeholder="Apto 101"
+            />
+          </div>
+
+          <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="cidade">
+              Cidade
+            </label>
+            <input
+              id="cidade"
+              value={formulario.cidade}
+              onChange={(e) =>
+                alterarCampo("cidade", e.target.value)
+              }
+              placeholder="São Paulo"
+            />
+          </div>
+
+          <div className="cliente-campo">
+            <label className="medium-h3" htmlFor="estado">
+              Estado
+            </label>
+            <input
+              id="estado"
+              maxLength={2}
+              value={formulario.estado}
+              onChange={(e) =>
+                alterarCampo("estado", e.target.value.toUpperCase())
+              }
+              placeholder="SP"
             />
           </div>
 
           <div className="cliente-campo cliente-campo-email">
-            <label
-              className="medium-h3"
-              htmlFor="cliente-email"
-            >
+            <label className="medium-h3" htmlFor="email">
               E-mail
             </label>
-
             <input
-              id="cliente-email"
+              id="email"
               type="email"
-              placeholder="Ex: maria.silva@email.com"
               value={formulario.email}
-              onChange={(evento) =>
-                alterarCampo("email", evento.target.value)
+              onChange={(e) =>
+                alterarCampo("email", e.target.value)
               }
+              placeholder="email@exemplo.com"
             />
           </div>
         </div>
@@ -295,12 +403,14 @@ function Clientes() {
             />
           </div>
 
-          <div onClick={salvarCliente}>
+          <div onClick={() => void salvarCliente()}>
             <Button
               texto={
-                clienteEmEdicao !== null
-                  ? "Atualizar"
-                  : "Salvar"
+                salvando
+                  ? "Salvando..."
+                  : clienteEmEdicao !== null
+                    ? "Atualizar"
+                    : "Salvar"
               }
               cor="btn-primaria"
             />
@@ -316,7 +426,9 @@ function Clientes() {
             </h2>
 
             <p className="light-h3">
-              {clientesFiltrados.length} cliente(s) encontrado(s)
+              {carregando
+                ? "Carregando clientes..."
+                : `${clientesFiltrados.length} cliente(s) encontrado(s)`}
             </p>
           </div>
 
@@ -328,11 +440,9 @@ function Clientes() {
 
             <input
               type="search"
-              placeholder="Pesquisar por nome, CPF, contato ou e-mail"
+              placeholder="Pesquisar clientes"
               value={filtro}
-              onChange={(evento) =>
-                setFiltro(evento.target.value)
-              }
+              onChange={(e) => setFiltro(e.target.value)}
             />
           </div>
         </div>
@@ -346,10 +456,9 @@ function Clientes() {
                 <th className="medium-h3">Contato</th>
                 <th className="medium-h3">Endereço</th>
                 <th className="medium-h3">E-mail</th>
-                <th
-                  className="clientes-coluna-acoes"
-                  aria-label="Ações"
-                />
+                <th className="clientes-coluna-acoes">
+                  Ações
+                </th>
               </tr>
             </thead>
 
@@ -357,54 +466,58 @@ function Clientes() {
               {clientesFiltrados.length === 0 ? (
                 <tr>
                   <td
-                    className="clientes-sem-resultados light-h3"
                     colSpan={6}
+                    className="clientes-sem-resultados"
                   >
-                    Nenhum cliente encontrado.
+                    {carregando
+                      ? "Carregando..."
+                      : "Nenhum cliente encontrado."}
                   </td>
                 </tr>
               ) : (
                 clientesFiltrados.map((cliente) => (
-                  <tr key={cliente.id}>
-                    <td className="medium-h3">
-                      {cliente.nome}
-                    </td>
+           <tr key={cliente.id}>
+           <td className="medium-h3">
+                   {cliente.nome}
+          </td>
 
-                    <td className="light-h3">
-                      {cliente.cpf}
-                    </td>
+           <td className="light-h3">
+                   {cliente.cpf}
+             </td>
 
-                    <td className="light-h3">
+              <td className="light-h3">
                       {cliente.contato}
-                    </td>
+               </td>
 
-                    <td className="light-h3">
-                      {cliente.endereco}
-                    </td>
+               <td className="light-h3">
+                      {`${cliente.rua}, ${cliente.numero}${
+                        cliente.complemento
+                      ? ` - ${cliente.complemento}`
+                          : ""
+                      } - ${cliente.cidade}/${cliente.estado}`}
+               </td>
 
-                    <td className="light-h3">
+               <td className="light-h3">
                       {cliente.email}
-                    </td>
+                 </td>
 
-                    <td>
-                      <div className="clientes-acoes-linha">
-                        <button
-                          type="button"
-                          className="cliente-acao cliente-editar"
-                          onClick={() =>
-                            editarCliente(cliente)
-                          }
-                          aria-label={`Editar ${cliente.nome}`}
-                          title="Editar cliente"
+                 <td>
+                 <div className="clientes-acoes-linha">
+                 <button
+                 type="button"
+                 className="cliente-acao cliente-editar"
+                 onClick={() => editarCliente(cliente)}
+                 aria-label={`Editar ${cliente.nome}`}
+                  title="Editar cliente"
                         >
-                          <Pencil size={16} />
-                        </button>
+                 <Pencil size={16} />
+                </button>
 
                         <button
                           type="button"
                           className="cliente-acao cliente-excluir"
                           onClick={() =>
-                            excluirCliente(cliente.id)
+                            void excluirCliente(cliente.id)
                           }
                           aria-label={`Excluir ${cliente.nome}`}
                           title="Excluir cliente"

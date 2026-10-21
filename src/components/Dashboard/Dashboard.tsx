@@ -1,14 +1,20 @@
-import "./Dashboard.css";
 
-import Chart from 'react-apexcharts';
+import "./Dashboard.css";
+import Chart from "react-apexcharts";
+import type { ApexOptions } from "apexcharts";
 
 function GraficoApex() {
-  const options = {
-    chart: { id: 'basic-bar' },
-    xaxis: { categories: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul"] },
-
+  const options: ApexOptions = {
+    chart: {
+      id: "basic-bar",
+      toolbar: {
+        show: false,
+      },
+    },
+    xaxis: {
+      categories: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul"],
+    },
     colors: ["var(--primaria)"],
-
     plotOptions: {
       bar: {
         columnWidth: "45%",
@@ -18,18 +24,24 @@ function GraficoApex() {
     },
   };
 
-  const series = [{
-    name: 'vendas',
-    data: [30, 40, 35, 50, 49, 60, 80]
-  }];
+  const series = [
+    {
+      name: "vendas",
+      data: [30, 40, 35, 50, 49, 60, 80],
+    },
+  ];
 
   return (
     <div>
-      <Chart options={options} series={series} type="bar" width="800px" />
+      <Chart
+        options={options}
+        series={series}
+        type="bar"
+        width="800px"
+      />
     </div>
   );
 }
-
 
 type ResumoCardProps = {
   titulo: string;
@@ -59,10 +71,7 @@ function ResumoCard({
     <article className="dashboard-resumo-card">
       <div className="dashboard-resumo-informacoes">
         <span className="light-h3">{titulo}</span>
-
-        <strong className="bold-h2">
-          {valor}
-        </strong>
+        <strong className="bold-h2">{valor}</strong>
       </div>
 
       <div className="dashboard-mini-grafico">
@@ -90,9 +99,7 @@ function ResumoCard({
           {tendencia === "alta" ? "↗" : "↘"}
         </span>
 
-        <span className="light-h4">
-          {percentual}
-        </span>
+        <span className="light-h4">{percentual}</span>
       </div>
     </article>
   );
@@ -128,8 +135,6 @@ function Dashboard() {
 
   return (
     <section className="dashboard">
-      {/* Cards de resumo */}
-
       <div className="dashboard-resumos">
         <ResumoCard
           titulo="Total de vendas"
@@ -156,14 +161,10 @@ function Dashboard() {
         />
       </div>
 
-      {/* Área central */}
-
       <div className="dashboard-centro">
         <article className="dashboard-card dashboard-previsao">
           <div className="dashboard-card-cabecalho">
-            <h2 className="medium-h2">
-              Previsão de vendas
-            </h2>
+            <h2 className="medium-h2">Previsão de vendas</h2>
 
             <select
               className="dashboard-periodo"
@@ -175,32 +176,19 @@ function Dashboard() {
               <option value="anual">Anual</option>
             </select>
           </div>
-          
-          <GraficoApex />
-          
-        </article>
 
-        {/* Origem dos contatos */}
+          <GraficoApex />
+        </article>
 
         <article className="dashboard-card dashboard-origens">
           <div className="dashboard-card-cabecalho">
-            <h2 className="medium-h2">
-              Origem
-            </h2>
-
-            <span className="light-h3">
-              Contatos
-            </span>
+            <h2 className="medium-h2">Origem</h2>
+            <span className="light-h3">Contatos</span>
           </div>
 
           <div className="dashboard-origem-total">
-            <strong className="bold-h1">
-              R$ 97.000
-            </strong>
-
-            <span className="light-h4">
-              Total por origem
-            </span>
+            <strong className="bold-h1">R$ 97.000</strong>
+            <span className="light-h4">Total por origem</span>
           </div>
 
           <div className="dashboard-circulo">
@@ -213,55 +201,30 @@ function Dashboard() {
           <div className="dashboard-lista-origens">
             <div className="dashboard-origem-item">
               <span className="dashboard-cor dashboard-cor-site" />
-
-              <span className="light-h3">
-                Website
-              </span>
-
-              <strong className="medium-h3">
-                4.909
-              </strong>
+              <span className="light-h3">Website</span>
+              <strong className="medium-h3">4.909</strong>
             </div>
 
             <div className="dashboard-origem-item">
               <span className="dashboard-cor dashboard-cor-social" />
-
-              <span className="light-h3">
-                Redes sociais
-              </span>
-
-              <strong className="medium-h3">
-                9.333
-              </strong>
+              <span className="light-h3">Redes sociais</span>
+              <strong className="medium-h3">9.333</strong>
             </div>
 
             <div className="dashboard-origem-item">
               <span className="dashboard-cor dashboard-cor-email" />
-
-              <span className="light-h3">
-                E-mails
-              </span>
-
-              <strong className="medium-h3">
-                1.212
-              </strong>
+              <span className="light-h3">E-mails</span>
+              <strong className="medium-h3">1.212</strong>
             </div>
           </div>
         </article>
       </div>
 
-      {/* Tabela */}
-
       <article className="dashboard-tabela-card">
         <div className="dashboard-tabela-topo">
           <div>
-            <h2 className="medium-h2">
-              Vendas recentes
-            </h2>
-
-            <p className="light-h3">
-              Últimos negócios registrados
-            </p>
+            <h2 className="medium-h2">Vendas recentes</h2>
+            <p className="light-h3">Últimos negócios registrados</p>
           </div>
 
           <button
@@ -282,26 +245,11 @@ function Dashboard() {
                     aria-label="Selecionar todas as vendas"
                   />
                 </th>
-
-                <th className="medium-h3">
-                  Nome do negócio
-                </th>
-
-                <th className="medium-h3">
-                  Empresa
-                </th>
-
-                <th className="medium-h3">
-                  Preço
-                </th>
-
-                <th className="medium-h3">
-                  Data da venda
-                </th>
-
-                <th className="medium-h3">
-                  Responsável
-                </th>
+                <th className="medium-h3">Nome do negócio</th>
+                <th className="medium-h3">Empresa</th>
+                <th className="medium-h3">Preço</th>
+                <th className="medium-h3">Data da venda</th>
+                <th className="medium-h3">Responsável</th>
               </tr>
             </thead>
 
@@ -315,36 +263,25 @@ function Dashboard() {
                     />
                   </td>
 
-                  <td className="light-h3">
-                    {venda.negocio}
-                  </td>
+                  <td className="light-h3">{venda.negocio}</td>
 
                   <td>
                     <div className="dashboard-empresa">
                       <span className="dashboard-avatar">
                         {venda.empresa.charAt(0)}
                       </span>
-
-                      <span className="light-h3">
-                        {venda.empresa}
-                      </span>
+                      <span className="light-h3">{venda.empresa}</span>
                     </div>
                   </td>
 
-                  <td className="medium-h3">
-                    {venda.preco}
-                  </td>
-
-                  <td className="light-h3">
-                    {venda.data}
-                  </td>
+                  <td className="medium-h3">{venda.preco}</td>
+                  <td className="light-h3">{venda.data}</td>
 
                   <td>
                     <div className="dashboard-responsavel">
                       <span className="dashboard-avatar">
                         {venda.responsavel.charAt(0)}
                       </span>
-
                       <span className="light-h3">
                         {venda.responsavel}
                       </span>
