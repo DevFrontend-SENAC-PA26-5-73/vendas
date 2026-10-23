@@ -741,3 +741,103 @@
   background-color: rgb(198 255 0 / 12%);
   border-color: var(--primaria);
 }
+
+/* ========================================
+   EDIÇÃO PELO HISTÓRICO
+======================================== */
+
+.fluxo-status-edicao {
+  flex-shrink: 0;
+  padding: 8px 14px;
+
+  color: var(--b);
+  background-color: var(--primaria);
+
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.fluxo-tabela {
+  min-width: 1160px;
+}
+
+.fluxo-coluna-acoes {
+  width: 95px;
+  text-align: right !important;
+}
+
+.fluxo-acoes-linha {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.fluxo-acao {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--b);
+  background-color: transparent;
+
+  border: none;
+  border-radius: 6px;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.fluxo-acao:hover {
+  transform: translateY(-1px);
+}
+
+.fluxo-editar:hover {
+  background-color: var(--primaria);
+}
+
+.fluxo-sem-acao {
+  color: #888890;
+
+  font-family: "Montserrat", sans-serif;
+  font-size: 10px;
+}
+
+.fluxo-linha-em-edicao {
+  background-color: rgb(198 255 0 / 10%) !important;
+  box-shadow: inset 4px 0 0 var(--primaria);
+}
+
+.fluxo-campo select:disabled {
+  color: var(--b);
+  background-color: var(--c);
+
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+@media (max-width: 650px) {
+  .fluxo-status-edicao {
+    width: fit-content;
+  }
+}
+
+.produto-campo input:read-only {
+  color: #66666f;
+  background-color: #ededf0;
+  cursor: not-allowed;
+}
+
+.produto-codigo-ajuda {
+  color: #777780;
+  font-family: "Montserrat", sans-serif;
+  font-size: 10px;
+  line-height: 1.4;
+}
