@@ -5,10 +5,11 @@ import {
   useState,
 } from "react";
 
+import type { FormEvent } from "react";
+
 import "./FluxoCaixa.css";
 
-const API_URL =
-  "https://vendas.gabrielpimentel.com.br";
+const API_URL = "http://10.3.20.30:5001";
 
 /* =========================
    Tipos
@@ -24,49 +25,29 @@ type Produto = {
   preco: number;
 };
 
-type FormularioMovimentacao = {
-  tipo: TipoMovimentacao;
-  produto_id: string;
-  quantidade: string;
-  preco_unitario: string;
-  categoria: string;
-  descricao: string;
-  data_movimentacao: string;
-  venda_id: string;
+type ItemVenda = {
+  id: number;
+  quantidade: number;
+  preco: number;
+  vendas_id: number;
+  produtos_id: number;
 };
 
-type MovimentacaoApi = {
-  id: number;
-  tipo: TipoMovimentacao;
+type FormularioEntrada = {
+  produto_id: string;
+  quantidade: string;
+  descricao: string;
+  data_movimentacao: string;
+};
 
-  produto_id?: number | null;
+type MovimentacaoVisual = {
+  id: string;
+  tipo: TipoMovimentacao;
+  produto_id: number;
   quantidade: number;
   preco_unitario: number;
   descricao: string;
-  venda_id?: number | null;
-
-  /*
-    Campos preparados para quando forem
-    adicionados ao back-end.
-  */
-
-  categoria?: string;
-  valor_total?: number;
   data_movimentacao?: string;
-  createdAt?: string;
-
-  produto?: {
-    id: number;
-    nome: string;
-  };
-};
-
-type ResumoFluxoApi = {
-  totalEntradas?: number;
-  totalSaidas?: number;
-  entradas?: number;
-  saidas?: number;
-  saldo?: number;
 };
 
 type Mensagem = {
@@ -74,27 +55,44 @@ type Mensagem = {
   texto: string;
 };
 
-const formularioInicial: FormularioMovimentacao = {
-  tipo: "entrada",
-  produto_id: "",
-  quantidade: "1",
-  preco_unitario: "",
-  categoria: "",
-  descricao: "",
-  data_movimentacao: new Date()
-    .toISOString()
-    .slice(0, 10),
-  venda_id: "",
+type RespostaErroApi = {
+  message?: string | string[];
+  error?: string;
+  statusCode?: number;
 };
 
 /* =========================
-   Funções auxiliares
+   Estado inicial
 ========================= */
+
+function obterDataAtual() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+const formularioInicial: FormularioEntrada = {
+  produto_id: "",
+  quantidade: "1",
+  descricao: "",
+  data_movimentacao: obterDataAtual(),
+};
+
+/* =========================
+   Formatação
+========================= */
+
+function formatarNumero(valor: number) {
+  return Number(valor || 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
 
 function formatarMoeda(valor: number) {
   return Number(valor || 0).toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 }
 
@@ -107,61 +105,103 @@ function formatarData(data?: string) {
     ? data
     : `${data}T00:00:00`;
 
-  return new Date(dataNormalizada).toLocaleDateString(
-    "pt-BR",
-    {
-      timeZone: "UTC",
-    },
-  );
-}
+  const dataConvertida = new Date(dataNormalizada);
 
-function obterValorMovimentacao(
-  movimentacao: MovimentacaoApi,
-) {
-  if (movimentacao.valor_total !== undefined) {
-    return Number(movimentacao.valor_total);
+  if (Number.isNaN(dataConvertida.getTime())) {
+    return "Data inválida";
   }
 
-  return (
-    Number(movimentacao.quantidade || 0) *
-    Number(movimentacao.preco_unitario || 0)
-  );
-}
-
-function obterNomeProduto(
-  produtoId: number | null | undefined,
-  produtos: Produto[],
-) {
-  if (!produtoId) {
-    return "Sem produto";
-  }
-
-  const produto = produtos.find(
-    (item) => item.id === produtoId,
-  );
-
-  return produto?.nome ?? `Produto #${produtoId}`;
+  return dataConvertida.toLocaleDateString("pt-BR", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 /* =========================
-   Componente principal
+   Funções auxiliares
+========================= */
+
+function obterProduto(
+  produtoId: number,
+  produtos: Produto[],
+) {
+  return produtos.find(
+    (produto) => produto.id === produtoId,
+  );
+}
+
+async function lerResposta(
+  resposta: Response,
+): Promise<unknown> {
+  const texto = await resposta.text();
+
+  if (!texto) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    return texto;
+  }
+}
+
+function obterMensagemErro(
+  dados: unknown,
+  status: number,
+) {
+  if (
+    dados &&
+    typeof dados === "object" &&
+    "message" in dados
+  ) {
+    const erro = dados as RespostaErroApi;
+
+    if (Array.isArray(erro.message)) {
+      return erro.message.join(", ");
+    }
+
+    if (typeof erro.message === "string") {
+      return erro.message;
+    }
+  }
+
+  if (
+    typeof dados === "string" &&
+    dados.trim().length > 0
+  ) {
+    return dados;
+  }
+
+  return `Erro HTTP ${status}`;
+}
+
+/* =========================
+   Componente
 ========================= */
 
 function FluxoCaixa() {
   const [formulario, setFormulario] =
-    useState<FormularioMovimentacao>(
-      formularioInicial,
-    );
+    useState<FormularioEntrada>({
+      ...formularioInicial,
+    });
 
   const [produtos, setProdutos] = useState<
     Produto[]
   >([]);
 
-  const [movimentacoes, setMovimentacoes] =
-    useState<MovimentacaoApi[]>([]);
+  const [estoque, setEstoque] = useState<
+    Produto[]
+  >([]);
 
-  const [resumoApi, setResumoApi] =
-    useState<ResumoFluxoApi | null>(null);
+  const [itensVenda, setItensVenda] = useState<
+    ItemVenda[]
+  >([]);
+
+  const [entradasSessao, setEntradasSessao] =
+    useState<MovimentacaoVisual[]>([]);
 
   const [carregando, setCarregando] =
     useState(true);
@@ -172,109 +212,159 @@ function FluxoCaixa() {
   const [mensagem, setMensagem] =
     useState<Mensagem | null>(null);
 
+  const [busca, setBusca] = useState("");
+
   const [filtroTipo, setFiltroTipo] = useState<
     "todos" | TipoMovimentacao
   >("todos");
 
-  const [busca, setBusca] = useState("");
-
   /* =========================
-     Valores calculados
+     Produto selecionado
   ========================= */
 
-  const valorTotalFormulario = useMemo(() => {
-    return (
-      Number(formulario.quantidade || 0) *
-      Number(formulario.preco_unitario || 0)
+  const produtoSelecionado = useMemo(() => {
+    const produtoId = Number(
+      formulario.produto_id,
     );
+
+    if (!produtoId) {
+      return undefined;
+    }
+
+    return produtos.find(
+      (produto) => produto.id === produtoId,
+    );
+  }, [formulario.produto_id, produtos]);
+
+  const precoUnitario = Number(
+    produtoSelecionado?.preco ?? 0,
+  );
+
+  const categoriaProduto =
+    produtoSelecionado?.tipo ??
+    "Selecione um produto";
+
+  const quantidadeInformada = Number(
+    formulario.quantidade || 0,
+  );
+
+  const valorTotalFormulario = useMemo(() => {
+    const valor =
+      quantidadeInformada * precoUnitario;
+
+    return Number(valor.toFixed(2));
   }, [
-    formulario.quantidade,
-    formulario.preco_unitario,
+    quantidadeInformada,
+    precoUnitario,
   ]);
 
-  const resumoCalculado = useMemo(() => {
-    const totalEntradas = movimentacoes
-      .filter(
-        (movimentacao) =>
-          movimentacao.tipo === "entrada",
-      )
-      .reduce((total, movimentacao) => {
+  /* =========================
+     Totais em unidades
+  ========================= */
+
+  const totalUnidadesEstoque = useMemo(() => {
+    return estoque.reduce(
+      (total, produto) => {
         return (
           total +
-          obterValorMovimentacao(movimentacao)
+          Number(produto.quantidade || 0)
         );
-      }, 0);
+      },
+      0,
+    );
+  }, [estoque]);
 
-    const totalSaidas = movimentacoes
-      .filter(
-        (movimentacao) =>
-          movimentacao.tipo === "saida",
-      )
-      .reduce((total, movimentacao) => {
+  const totalUnidadesVendidas = useMemo(() => {
+    return itensVenda.reduce(
+      (total, item) => {
         return (
           total +
-          obterValorMovimentacao(movimentacao)
+          Number(item.quantidade || 0)
         );
-      }, 0);
+      },
+      0,
+    );
+  }, [itensVenda]);
 
-    return {
-      totalEntradas,
-      totalSaidas,
-      saldo: totalEntradas - totalSaidas,
-    };
-  }, [movimentacoes]);
+  /* =========================
+     Saídas do Atendimento
+  ========================= */
 
-  /*
-    Aceita tanto totalEntradas/totalSaidas
-    quanto entradas/saidas, caso o back-end
-    utilize algum desses formatos.
-  */
+  const saidasAtendimento =
+    useMemo<MovimentacaoVisual[]>(() => {
+      return itensVenda.map((item) => {
+        const quantidade = Number(
+          item.quantidade || 0,
+        );
 
-  const totalEntradas =
-    resumoApi?.totalEntradas ??
-    resumoApi?.entradas ??
-    resumoCalculado.totalEntradas;
+        const preco = Number(
+          item.preco || 0,
+        );
 
-  const totalSaidas =
-    resumoApi?.totalSaidas ??
-    resumoApi?.saidas ??
-    resumoCalculado.totalSaidas;
+        return {
+          id: `saida-${item.id}`,
+          tipo: "saida",
+          produto_id: item.produtos_id,
+          quantidade,
+          preco_unitario: Number(
+            preco.toFixed(2),
+          ),
+          descricao: `Saída gerada pela venda #${item.vendas_id}`,
+        };
+      });
+    }, [itensVenda]);
 
-  const saldo =
-    resumoApi?.saldo ??
-    totalEntradas - totalSaidas;
+  /* =========================
+     Histórico
+  ========================= */
 
-  const movimentacoesFiltradas = useMemo(() => {
+  const historicoCompleto = useMemo(() => {
+    return [
+      ...entradasSessao,
+      ...saidasAtendimento,
+    ];
+  }, [
+    entradasSessao,
+    saidasAtendimento,
+  ]);
+
+  const historicoFiltrado = useMemo(() => {
     const termo = busca.trim().toLowerCase();
 
-    return movimentacoes.filter(
+    return historicoCompleto.filter(
       (movimentacao) => {
         const correspondeTipo =
           filtroTipo === "todos" ||
           movimentacao.tipo === filtroTipo;
 
-        const nomeProduto = obterNomeProduto(
+        const produto = obterProduto(
           movimentacao.produto_id,
           produtos,
-        ).toLowerCase();
+        );
+
+        const textoPesquisa = [
+          produto?.nome,
+          produto?.tipo,
+          movimentacao.descricao,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
 
         const correspondeBusca =
           termo.length === 0 ||
-          nomeProduto.includes(termo) ||
-          movimentacao.descricao
-            ?.toLowerCase()
-            .includes(termo) ||
-          movimentacao.categoria
-            ?.toLowerCase()
-            .includes(termo);
+          textoPesquisa.includes(termo);
 
-        return correspondeTipo && correspondeBusca;
+        return (
+          correspondeTipo &&
+          correspondeBusca
+        );
       },
     );
   }, [
     busca,
     filtroTipo,
-    movimentacoes,
+    historicoCompleto,
     produtos,
   ]);
 
@@ -282,76 +372,97 @@ function FluxoCaixa() {
      Carregamento da API
   ========================= */
 
-  const carregarDados = useCallback(async () => {
-    try {
-      setCarregando(true);
-      setMensagem(null);
+  const carregarDados =
+    useCallback(async () => {
+      try {
+        setCarregando(true);
+        setMensagem(null);
 
-      /*
-        allSettled evita quebrar a tela inteira
-        caso GET /fluxo-caixa continue retornando 500.
-      */
+        const [
+          respostaProdutos,
+          respostaEstoque,
+          respostaItensVenda,
+        ] = await Promise.all([
+          fetch(`${API_URL}/produtos`),
+          fetch(`${API_URL}/estoque`),
+          fetch(`${API_URL}/itemvenda`),
+        ]);
 
-      const [
-        resultadoProdutos,
-        resultadoMovimentacoes,
-        resultadoResumo,
-      ] = await Promise.allSettled([
-        fetch(`${API_URL}/produtos`),
-        fetch(`${API_URL}/fluxo-caixa`),
-        fetch(`${API_URL}/fluxo-caixa/resumo`),
-      ]);
+        if (!respostaProdutos.ok) {
+          throw new Error(
+            `Erro ${respostaProdutos.status} ao carregar produtos.`,
+          );
+        }
 
-      if (
-        resultadoProdutos.status === "fulfilled" &&
-        resultadoProdutos.value.ok
-      ) {
-        const produtosRecebidos: Produto[] =
-          await resultadoProdutos.value.json();
+        if (!respostaEstoque.ok) {
+          throw new Error(
+            `Erro ${respostaEstoque.status} ao carregar estoque.`,
+          );
+        }
 
-        setProdutos(produtosRecebidos);
-      }
+        if (!respostaItensVenda.ok) {
+          throw new Error(
+            `Erro ${respostaItensVenda.status} ao carregar vendas.`,
+          );
+        }
 
-      if (
-        resultadoMovimentacoes.status ===
-          "fulfilled" &&
-        resultadoMovimentacoes.value.ok
-      ) {
-        const movimentacoesRecebidas:
-          MovimentacaoApi[] =
-          await resultadoMovimentacoes.value.json();
+        const [
+          produtosRecebidos,
+          estoqueRecebido,
+          itensRecebidos,
+        ] = await Promise.all([
+          respostaProdutos.json() as Promise<
+            Produto[]
+          >,
 
-        setMovimentacoes(
-          Array.isArray(movimentacoesRecebidas)
-            ? movimentacoesRecebidas
+          respostaEstoque.json() as Promise<
+            Produto[]
+          >,
+
+          respostaItensVenda.json() as Promise<
+            ItemVenda[]
+          >,
+        ]);
+
+        setProdutos(
+          Array.isArray(produtosRecebidos)
+            ? produtosRecebidos
             : [],
         );
+
+        setEstoque(
+          Array.isArray(estoqueRecebido)
+            ? estoqueRecebido
+            : [],
+        );
+
+        setItensVenda(
+          Array.isArray(itensRecebidos)
+            ? itensRecebidos
+            : [],
+        );
+
+        console.log(
+          "Produtos recebidos da API:",
+          produtosRecebidos,
+        );
+      } catch (erro) {
+        console.error(
+          "Erro ao carregar dados:",
+          erro,
+        );
+
+        setMensagem({
+          tipo: "erro",
+          texto:
+            erro instanceof Error
+              ? erro.message
+              : "Não foi possível carregar os dados.",
+        });
+      } finally {
+        setCarregando(false);
       }
-
-      if (
-        resultadoResumo.status === "fulfilled" &&
-        resultadoResumo.value.ok
-      ) {
-        const resumoRecebido: ResumoFluxoApi =
-          await resultadoResumo.value.json();
-
-        setResumoApi(resumoRecebido);
-      }
-    } catch (erro) {
-      console.error(
-        "Erro ao carregar fluxo de caixa:",
-        erro,
-      );
-
-      setMensagem({
-        tipo: "erro",
-        texto:
-          "Não foi possível carregar todos os dados do fluxo de caixa.",
-      });
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
+    }, []);
 
   useEffect(() => {
     carregarDados();
@@ -361,60 +472,55 @@ function FluxoCaixa() {
      Eventos do formulário
   ========================= */
 
-  function alterarCampo(
-    campo: keyof FormularioMovimentacao,
-    valor: string,
-  ) {
-    setFormulario((dadosAtuais) => ({
-      ...dadosAtuais,
-      [campo]: valor,
-    }));
+function alterarCampo(
+  campo: keyof FormularioEntrada,
+  novoValor: string,
+) {
+  setFormulario((dadosAtuais) => ({
+    ...dadosAtuais,
+    [campo]: novoValor,
+  }));
 
-    setMensagem(null);
-  }
+  setMensagem(null);
+}
 
-  function selecionarProduto(produtoId: string) {
-    const produtoSelecionado = produtos.find(
-      (produto) =>
-        produto.id === Number(produtoId),
-    );
-
-    setFormulario((dadosAtuais) => ({
-      ...dadosAtuais,
-      produto_id: produtoId,
-
-      preco_unitario: produtoSelecionado
-        ? String(produtoSelecionado.preco)
-        : dadosAtuais.preco_unitario,
-    }));
-
-    setMensagem(null);
-  }
-
-  function limparFormulario(
-    tipo: TipoMovimentacao = formulario.tipo,
-  ) {
+  function limparFormulario() {
     setFormulario({
       ...formularioInicial,
-      tipo,
-      data_movimentacao: new Date()
-        .toISOString()
-        .slice(0, 10),
+      data_movimentacao: obterDataAtual(),
     });
+
+    setMensagem(null);
   }
 
-  async function registrarMovimentacao(
-    evento: React.FormEvent<HTMLFormElement>,
+  /* =========================
+     Registrar entrada
+  ========================= */
+
+  async function registrarEntrada(
+    evento: FormEvent<HTMLFormElement>,
   ) {
     evento.preventDefault();
+
+    const produtoId = Number(
+      formulario.produto_id,
+    );
 
     const quantidade = Number(
       formulario.quantidade,
     );
 
-    const precoUnitario = Number(
-      formulario.preco_unitario,
-    );
+    if (
+      !Number.isFinite(produtoId) ||
+      produtoId <= 0
+    ) {
+      setMensagem({
+        tipo: "erro",
+        texto: "Selecione um produto.",
+      });
+
+      return;
+    }
 
     if (
       !Number.isFinite(quantidade) ||
@@ -429,146 +535,122 @@ function FluxoCaixa() {
       return;
     }
 
-    if (
-      !Number.isFinite(precoUnitario) ||
-      precoUnitario <= 0
-    ) {
-      setMensagem({
-        tipo: "erro",
-        texto:
-          "Informe um preço unitário válido.",
-      });
+    const payload = {
+      produto_id: produtoId,
+      quantidade,
+    };
 
-      return;
-    }
-
-    if (!formulario.descricao.trim()) {
-      setMensagem({
-        tipo: "erro",
-        texto:
-          "Informe uma descrição para a movimentação.",
-      });
-
-      return;
-    }
+    console.log(
+      "Enviando para POST /estoque:",
+      payload,
+    );
 
     try {
       setSalvando(true);
       setMensagem(null);
 
-      /*
-        Campos aceitos atualmente pelo Swagger.
-      */
-
-      consttual = {
-        tipo: formulario.tipo,
-
-        produto_id: formulario.produto_id
-          ? Number(formulario.produto_id)
-          : null,
-
-        quantidade,
-
-        preco_unitario: precoUnitario,
-
-        descricao:
-          formulario.descricao.trim(),
-
-        venda_id: formulario.venda_id
-          ? Number(formulario.venda_id)
-          : null,
-      };
-
-      /*
-        Campos que futuramente devem fazer parte
-        do payload no back-end:
-
-        categoria: formulario.categoria,
-        valor_total: valorTotalFormulario,
-        data_movimentacao:
-          formulario.data_movimentacao,
-      */
-
       const resposta = await fetch(
-        `${API_URL}/fluxo-caixa`,
+        `${API_URL}/estoque`,
         {
           method: "POST",
 
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
             Accept: "application/json",
           },
 
-          body: JSON.stringify(payloadAtual),
+          body: JSON.stringify(payload),
         },
       );
 
+      const dadosResposta =
+        await lerResposta(resposta);
+
       if (!resposta.ok) {
-        let mensagemApi =
-          "Não foi possível registrar a movimentação.";
+        console.error(
+          "Erro retornado pela API:",
+          dadosResposta,
+        );
 
-        try {
-          const erroApi = await resposta.json();
-
-          if (erroApi?.message) {
-            mensagemApi = Array.isArray(
-              erroApi.message,
-            )
-              ? erroApi.message.join(", ")
-              : erroApi.message;
-          }
-        } catch {
-          // Mantém a mensagem padrão.
-        }
-
-        throw new Error(mensagemApi);
+        throw new Error(
+          obterMensagemErro(
+            dadosResposta,
+            resposta.status,
+          ),
+        );
       }
 
-      const movimentacaoCriada =
-        (await resposta.json()) as MovimentacaoApi;
+      const novaEntrada: MovimentacaoVisual = {
+        id: `entrada-${Date.now()}`,
+        tipo: "entrada",
+        produto_id: produtoId,
+        quantidade,
+        preco_unitario: Number(
+          precoUnitario.toFixed(2),
+        ),
+        descricao:
+          formulario.descricao.trim() ||
+          "Entrada de produto no estoque",
+        data_movimentacao:
+          formulario.data_movimentacao,
+      };
 
-      /*
-        Acrescenta os campos futuros somente no
-        estado da interface. Eles devem ser persistidos
-        pelo back-end quando o DTO for atualizado.
-      */
+      setEntradasSessao(
+        (entradasAtuais) => [
+          novaEntrada,
+          ...entradasAtuais,
+        ],
+      );
 
-      const movimentacaoCompleta: MovimentacaoApi =
-        {
-          ...movimentacaoCriada,
+      setEstoque((estoqueAtual) => {
+        const produtoExiste =
+          estoqueAtual.some(
+            (produto) =>
+              produto.id === produtoId,
+          );
 
-          categoria:
-            movimentacaoCriada.categoria ??
-            formulario.categoria,
+        if (!produtoExiste) {
+          if (!produtoSelecionado) {
+            return estoqueAtual;
+          }
 
-          valor_total:
-            movimentacaoCriada.valor_total ??
-            valorTotalFormulario,
+          return [
+            ...estoqueAtual,
+            {
+              ...produtoSelecionado,
+              quantidade,
+            },
+          ];
+        }
 
-          data_movimentacao:
-            movimentacaoCriada.data_movimentacao ??
-            formulario.data_movimentacao,
-        };
+        return estoqueAtual.map((produto) => {
+          if (produto.id !== produtoId) {
+            return produto;
+          }
 
-      setMovimentacoes((movimentacoesAtuais) => [
-        movimentacaoCompleta,
-        ...movimentacoesAtuais,
-      ]);
-
-      setResumoApi(null);
+          return {
+            ...produto,
+            quantidade:
+              Number(produto.quantidade || 0) +
+              quantidade,
+          };
+        });
+      });
 
       setMensagem({
         tipo: "sucesso",
         texto:
-          formulario.tipo === "entrada"
-            ? "Entrada registrada com sucesso."
-            : "Saída registrada com sucesso.",
+          "Entrada registrada com sucesso.",
       });
 
-      limparFormulario(formulario.tipo);
+      setFormulario({
+        ...formularioInicial,
+        data_movimentacao: obterDataAtual(),
+      });
     } catch (erro) {
       console.error(
-        "Erro ao registrar movimentação:",
+        "Erro ao registrar entrada:",
         erro,
       );
 
@@ -578,7 +660,7 @@ function FluxoCaixa() {
         texto:
           erro instanceof Error
             ? erro.message
-            : "Não foi possível registrar a movimentação.",
+            : "Não foi possível registrar a entrada.",
       });
     } finally {
       setSalvando(false);
@@ -586,7 +668,7 @@ function FluxoCaixa() {
   }
 
   /* =========================
-     Renderização
+     Interface
   ========================= */
 
   return (
@@ -594,17 +676,17 @@ function FluxoCaixa() {
       <header className="fluxo-cabecalho">
         <div className="fluxo-cabecalho-texto">
           <span className="fluxo-cabecalho-icone">
-            $
+            ↕
           </span>
 
           <div>
             <h1 className="medium-h1">
-              Fluxo de Caixa
+              Movimentação de estoque
             </h1>
 
             <p className="light-h3">
-              Registre e acompanhe as movimentações
-              financeiras.
+              Registre entradas e acompanhe as
+              saídas realizadas pelo atendimento.
             </p>
           </div>
         </div>
@@ -621,128 +703,70 @@ function FluxoCaixa() {
         </button>
       </header>
 
-      {/* Resumo financeiro */}
-
       <div className="fluxo-resumo">
         <article className="fluxo-resumo-card fluxo-resumo-entrada">
           <div className="fluxo-resumo-topo">
             <span className="fluxo-resumo-icone">
-              ↗
+              +
             </span>
 
             <span className="light-h3">
-              Total de entradas
+              Unidades em estoque
             </span>
           </div>
 
           <strong className="bold-h2">
-            {formatarMoeda(totalEntradas)}
+            {formatarNumero(
+              totalUnidadesEstoque,
+            )}
           </strong>
 
           <small>
-            Valores registrados como entrada
+            Soma atual das unidades disponíveis
           </small>
         </article>
 
         <article className="fluxo-resumo-card fluxo-resumo-saida">
           <div className="fluxo-resumo-topo">
             <span className="fluxo-resumo-icone">
-              ↘
+              −
             </span>
 
             <span className="light-h3">
-              Total de saídas
+              Unidades vendidas
             </span>
           </div>
 
           <strong className="bold-h2">
-            {formatarMoeda(totalSaidas)}
+            {formatarNumero(
+              totalUnidadesVendidas,
+            )}
           </strong>
 
           <small>
-            Valores registrados como despesa
-          </small>
-        </article>
-
-        <article
-          className={`fluxo-resumo-card fluxo-resumo-saldo ${
-            saldo < 0
-              ? "fluxo-resumo-saldo-negativo"
-              : ""
-          }`}
-        >
-          <div className="fluxo-resumo-topo">
-            <span className="fluxo-resumo-icone">
-              =
-            </span>
-
-            <span className="light-h3">
-              Saldo atual
-            </span>
-          </div>
-
-          <strong className="bold-h2">
-            {formatarMoeda(saldo)}
-          </strong>
-
-          <small>
-            Entradas menos saídas
+            Saídas registradas pelo atendimento
           </small>
         </article>
       </div>
-
-      {/* Formulário */}
 
       <article className="fluxo-painel">
         <div className="fluxo-painel-cabecalho">
           <div>
             <h2 className="medium-h2">
-              Nova movimentação
+              Nova entrada de produto
             </h2>
 
             <p className="light-h3">
-              Preencha os dados para registrar uma
-              entrada ou saída.
+              Selecione um produto e informe a
+              quantidade recebida.
             </p>
           </div>
         </div>
 
         <form
           className="fluxo-formulario"
-          onSubmit={registrarMovimentacao}
+          onSubmit={registrarEntrada}
         >
-          <div className="fluxo-tipo-seletor">
-            <button
-              type="button"
-              className={`fluxo-tipo-botao ${
-                formulario.tipo === "entrada"
-                  ? "fluxo-tipo-botao-entrada-ativo"
-                  : ""
-              }`}
-              onClick={() =>
-                alterarCampo("tipo", "entrada")
-              }
-            >
-              <span>↗</span>
-              Entrada
-            </button>
-
-            <button
-              type="button"
-              className={`fluxo-tipo-botao ${
-                formulario.tipo === "saida"
-                  ? "fluxo-tipo-botao-saida-ativo"
-                  : ""
-              }`}
-              onClick={() =>
-                alterarCampo("tipo", "saida")
-              }
-            >
-              <span>↘</span>
-              Saída
-            </button>
-          </div>
-
           <div className="fluxo-campos">
             <label className="fluxo-campo">
               <span className="medium-h3">
@@ -752,19 +776,24 @@ function FluxoCaixa() {
               <select
                 value={formulario.produto_id}
                 onChange={(evento) =>
-                  selecionarProduto(
+                  alterarCampo(
+                    "produto_id",
                     evento.target.value,
                   )
                 }
+                disabled={carregando}
+                required
               >
                 <option value="">
-                  Selecione um produto
+                  {carregando
+                    ? "Carregando produtos..."
+                    : "Selecione um produto"}
                 </option>
 
                 {produtos.map((produto) => (
                   <option
                     key={produto.id}
-                    value={produto.id}
+                    value={String(produto.id)}
                   >
                     {produto.nome}
                   </option>
@@ -774,7 +803,7 @@ function FluxoCaixa() {
 
             <label className="fluxo-campo">
               <span className="medium-h3">
-                Quantidade
+                Quantidade recebida
               </span>
 
               <input
@@ -789,38 +818,13 @@ function FluxoCaixa() {
                   )
                 }
                 placeholder="Ex.: 10"
+                required
               />
             </label>
 
             <label className="fluxo-campo">
               <span className="medium-h3">
-                Preço unitário
-              </span>
-
-              <div className="fluxo-campo-moeda">
-                <span>R$</span>
-
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={
-                    formulario.preco_unitario
-                  }
-                  onChange={(evento) =>
-                    alterarCampo(
-                      "preco_unitario",
-                      evento.target.value,
-                    )
-                  }
-                  placeholder="0,00"
-                />
-              </div>
-            </label>
-
-            <label className="fluxo-campo">
-              <span className="medium-h3">
-                Data
+                Data da entrada
               </span>
 
               <input
@@ -834,93 +838,43 @@ function FluxoCaixa() {
                     evento.target.value,
                   )
                 }
+                required
               />
             </label>
 
-            <label className="fluxo-campo">
+            <div className="fluxo-campo">
               <span className="medium-h3">
                 Categoria
               </span>
 
-              <select
-                value={formulario.categoria}
-                onChange={(evento) =>
-                  alterarCampo(
-                    "categoria",
-                    evento.target.value,
-                  )
-                }
-              >
-                <option value="">
-                  Selecione uma categoria
-                </option>
+              <div className="fluxo-informacao">
+                {categoriaProduto}
+              </div>
+            </div>
 
-                {formulario.tipo === "entrada" ? (
-                  <>
-                    <option value="venda">
-                      Venda
-                    </option>
-
-                    <option value="aporte">
-                      Aporte
-                    </option>
-
-                    <option value="recebimento">
-                      Recebimento
-                    </option>
-
-                    <option value="outra_entrada">
-                      Outra entrada
-                    </option>
-                  </>
-                ) : (
-                  <>
-                    <option value="fornecedor">
-                      Compra de fornecedor
-                    </option>
-
-                    <option value="estoque">
-                      Reposição de estoque
-                    </option>
-
-                    <option value="frete">
-                      Frete
-                    </option>
-
-                    <option value="comissao">
-                      Comissão
-                    </option>
-
-                    <option value="imposto">
-                      Imposto
-                    </option>
-
-                    <option value="outra_despesa">
-                      Outra despesa
-                    </option>
-                  </>
-                )}
-              </select>
-            </label>
-
-            <label className="fluxo-campo">
+            <div className="fluxo-campo">
               <span className="medium-h3">
-                Venda relacionada
+                Preço unitário
               </span>
 
-              <input
-                type="number"
-                min="1"
-                value={formulario.venda_id}
-                onChange={(evento) =>
-                  alterarCampo(
-                    "venda_id",
-                    evento.target.value,
-                  )
-                }
-                placeholder="ID da venda, se houver"
-              />
-            </label>
+              <div className="fluxo-informacao">
+                {produtoSelecionado
+                  ? formatarMoeda(precoUnitario)
+                  : "Selecione um produto"}
+              </div>
+            </div>
+
+            <div className="fluxo-campo">
+              <span className="medium-h3">
+                Valor total
+              </span>
+
+              <div className="fluxo-informacao fluxo-informacao-valor">
+                {formatarMoeda(
+                  valorTotalFormulario,
+                )}
+              </div>
+            </div>
 
             <label className="fluxo-campo fluxo-campo-descricao">
               <span className="medium-h3">
@@ -936,29 +890,9 @@ function FluxoCaixa() {
                     evento.target.value,
                   )
                 }
-                placeholder={
-                  formulario.tipo === "entrada"
-                    ? "Ex.: Recebimento da venda do cliente"
-                    : "Ex.: Compra de mercadorias do fornecedor"
-                }
+                placeholder="Ex.: Reposição do estoque"
               />
             </label>
-
-            <div className="fluxo-total">
-              <span className="light-h3">
-                Valor total
-              </span>
-
-              <strong className="bold-h2">
-                {formatarMoeda(
-                  valorTotalFormulario,
-                )}
-              </strong>
-
-              <small>
-                Quantidade × preço unitário
-              </small>
-            </div>
           </div>
 
           {mensagem && (
@@ -978,7 +912,7 @@ function FluxoCaixa() {
             <button
               type="button"
               className="fluxo-botao-cancelar medium-h3"
-              onClick={() => limparFormulario()}
+              onClick={limparFormulario}
               disabled={salvando}
             >
               Limpar
@@ -986,34 +920,27 @@ function FluxoCaixa() {
 
             <button
               type="submit"
-              className={`fluxo-botao-salvar medium-h3 ${
-                formulario.tipo === "saida"
-                  ? "fluxo-botao-salvar-saida"
-                  : ""
-              }`}
+              className="fluxo-botao-salvar medium-h3"
               disabled={salvando}
             >
               {salvando
                 ? "Salvando..."
-                : formulario.tipo === "entrada"
-                  ? "Registrar entrada"
-                  : "Registrar saída"}
+                : "Registrar entrada"}
             </button>
           </div>
         </form>
       </article>
 
-      {/* Histórico */}
-
       <article className="fluxo-painel">
         <div className="fluxo-historico-topo">
           <div>
             <h2 className="medium-h2">
-              Movimentações recentes
+              Histórico desta sessão
             </h2>
 
             <p className="light-h3">
-              Histórico de entradas e saídas.
+              Entradas adicionadas agora e saídas
+              geradas pelas vendas.
             </p>
           </div>
 
@@ -1024,8 +951,8 @@ function FluxoCaixa() {
               onChange={(evento) =>
                 setBusca(evento.target.value)
               }
-              placeholder="Buscar movimentação"
-              aria-label="Buscar movimentação"
+              placeholder="Buscar produto"
+              aria-label="Buscar produto"
             />
 
             <select
@@ -1037,10 +964,10 @@ function FluxoCaixa() {
                     | TipoMovimentacao,
                 )
               }
-              aria-label="Filtrar por tipo"
+              aria-label="Filtrar movimentações"
             >
               <option value="todos">
-                Todos os tipos
+                Todas
               </option>
 
               <option value="entrada">
@@ -1058,13 +985,14 @@ function FluxoCaixa() {
           <table className="fluxo-tabela">
             <thead>
               <tr>
-                <th>Tipo</th>
-                <th>Descrição</th>
+                <th>Movimentação</th>
                 <th>Produto</th>
                 <th>Categoria</th>
+                <th>Descrição</th>
                 <th>Data</th>
                 <th>Quantidade</th>
-                <th>Valor</th>
+                <th>Preço unitário</th>
+                <th>Valor total</th>
               </tr>
             </thead>
 
@@ -1072,99 +1000,106 @@ function FluxoCaixa() {
               {carregando ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="fluxo-tabela-vazia"
                   >
-                    Carregando movimentações...
+                    Carregando dados...
                   </td>
                 </tr>
-              ) : movimentacoesFiltradas.length ===
+              ) : historicoFiltrado.length ===
                 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="fluxo-tabela-vazia"
                   >
                     Nenhuma movimentação encontrada.
-                    O endpoint de listagem pode ainda
-                    estar indisponível.
                   </td>
                 </tr>
               ) : (
-                movimentacoesFiltradas.map(
-                  (movimentacao) => (
-                    <tr key={movimentacao.id}>
-                      <td>
-                        <span
-                          className={`fluxo-status fluxo-status-${movimentacao.tipo}`}
-                        >
-                          {movimentacao.tipo ===
-                          "entrada"
-                            ? "↗ Entrada"
-                            : "↘ Saída"}
-                        </span>
-                      </td>
+                historicoFiltrado.map(
+                  (movimentacao) => {
+                    const produto =
+                      obterProduto(
+                        movimentacao.produto_id,
+                        produtos,
+                      );
 
-                      <td>
-                        <strong>
-                          {movimentacao.descricao ||
-                            "Sem descrição"}
-                        </strong>
+                    const nomeProduto =
+                      produto?.nome ??
+                      `Produto #${movimentacao.produto_id}`;
 
-                        {movimentacao.venda_id && (
-                          <small>
-                            Venda #
-                            {
-                              movimentacao.venda_id
-                            }
-                          </small>
-                        )}
-                      </td>
+                    const categoria =
+                      produto?.tipo ??
+                      "Não informada";
 
-                      <td>
-                        {obterNomeProduto(
-                          movimentacao.produto_id,
-                          produtos,
-                        )}
-                      </td>
+                    const valorTotal = Number(
+                      (
+                        movimentacao.quantidade *
+                        movimentacao.preco_unitario
+                      ).toFixed(2),
+                    );
 
-                      <td>
-                        {movimentacao.categoria
-                          ?.replaceAll("_", " ") ??
-                          "Não informada"}
-                      </td>
+                    return (
+                      <tr key={movimentacao.id}>
+                        <td>
+                          <span
+                            className={`fluxo-status fluxo-status-${movimentacao.tipo}`}
+                          >
+                            {movimentacao.tipo ===
+                            "entrada"
+                              ? "Entrada"
+                              : "Saída"}
+                          </span>
+                        </td>
 
-                      <td>
-                        {formatarData(
-                          movimentacao.data_movimentacao ??
-                            movimentacao.createdAt,
-                        )}
-                      </td>
+                        <td>
+                          <div className="fluxo-produto">
+                            <span className="fluxo-produto-avatar">
+                              {nomeProduto
+                                .charAt(0)
+                                .toUpperCase()}
+                            </span>
 
-                      <td>
-                        {movimentacao.quantidade}
-                      </td>
+                            <strong>
+                              {nomeProduto}
+                            </strong>
+                          </div>
+                        </td>
 
-                      <td
-                        className={
-                          movimentacao.tipo ===
-                          "entrada"
-                            ? "fluxo-valor-entrada"
-                            : "fluxo-valor-saida"
-                        }
-                      >
-                        {movimentacao.tipo ===
-                        "entrada"
-                          ? "+"
-                          : "-"}{" "}
-                        {formatarMoeda(
-                          obterValorMovimentacao(
-                            movimentacao,
-                          ),
-                        )}
-                      </td>
-                    </tr>
-                  ),
+                        <td>{categoria}</td>
+
+                        <td>
+                          {movimentacao.descricao}
+                        </td>
+
+                        <td>
+                          {formatarData(
+                            movimentacao.data_movimentacao,
+                          )}
+                        </td>
+
+                        <td>
+                          {formatarNumero(
+                            movimentacao.quantidade,
+                          )}{" "}
+                          un.
+                        </td>
+
+                        <td>
+                          {formatarMoeda(
+                            movimentacao.preco_unitario,
+                          )}
+                        </td>
+
+                        <td className="fluxo-valor-total">
+                          {formatarMoeda(
+                            valorTotal,
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  },
                 )
               )}
             </tbody>
