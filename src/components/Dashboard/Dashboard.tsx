@@ -425,9 +425,10 @@ function GraficoApex({
     },
 
     tooltip: {
-      y: {
-        formatter: (valor) => formatarMoeda(valor),
-      },
+      y: 
+      {
+  formatter: (valor) => formatarMoeda(Number(valor ?? 0)),
+},
     },
 
     noData: {
