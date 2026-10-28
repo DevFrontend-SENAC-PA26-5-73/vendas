@@ -1,20 +1,12 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-
 import { Pencil } from "lucide-react";
-
 import "./Movimentacao.css";
 
-const API_URL = "http://10.3.20.30:5001";
+// Mesma API usada pelo Atendimento (antes estava apontando para um IP da rede local)
+const API_URL = "https://vendas.gabrielpimentel.com.br";
 
-const CHAVE_HISTORICO =
-  "historico-movimentacoes-estoque";
+const CHAVE_HISTORICO = "historico-movimentacoes-estoque";
 
 /* =========================
    Tipos
@@ -36,6 +28,12 @@ type ItemVenda = {
   preco: number;
   vendas_id: number;
   produtos_id: number;
+};
+
+type Pagamento = {
+  id: number;
+  vendas_id: number;
+  data_pagamento?: string;
 };
 
 type FormularioEntrada = {
@@ -72,7 +70,10 @@ type RespostaErroApi = {
 ========================= */
 
 function obterDataAtual() {
-  return new Date().toISOString().slice(0, 10);
+  const agora = new Date();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
+  return `${agora.getFullYear()}-${mes}-${dia}`;
 }
 
 const formularioInicial: FormularioEntrada = {
@@ -88,63 +89,33 @@ const formularioInicial: FormularioEntrada = {
 
 function carregarHistoricoLocal(): MovimentacaoVisual[] {
   try {
-    const historicoSalvo =
-      localStorage.getItem(CHAVE_HISTORICO);
+    const historicoSalvo = localStorage.getItem(CHAVE_HISTORICO);
+    if (!historicoSalvo) return [];
 
-    if (!historicoSalvo) {
-      return [];
-    }
-
-    const dados: unknown =
-      JSON.parse(historicoSalvo);
-
-    if (!Array.isArray(dados)) {
-      return [];
-    }
+    const dados: unknown = JSON.parse(historicoSalvo);
+    if (!Array.isArray(dados)) return [];
 
     return dados.filter((item) => {
-      if (
-        !item ||
-        typeof item !== "object"
-      ) {
-        return false;
-      }
-
-      const movimentacao =
-        item as Partial<MovimentacaoVisual>;
-
+      if (!item || typeof item !== "object") return false;
+      const m = item as Partial<MovimentacaoVisual>;
       return (
-        typeof movimentacao.id === "string" &&
-        movimentacao.tipo === "entrada" &&
-        typeof movimentacao.produto_id ===
-          "number" &&
-        typeof movimentacao.quantidade ===
-          "number"
+        typeof m.id === "string" &&
+        m.tipo === "entrada" &&
+        typeof m.produto_id === "number" &&
+        typeof m.quantidade === "number"
       );
     }) as MovimentacaoVisual[];
   } catch (erro) {
-    console.error(
-      "Erro ao carregar histórico local:",
-      erro,
-    );
-
+    console.error("Erro ao carregar histórico local:", erro);
     return [];
   }
 }
 
-function salvarHistoricoLocal(
-  entradas: MovimentacaoVisual[],
-) {
+function salvarHistoricoLocal(entradas: MovimentacaoVisual[]) {
   try {
-    localStorage.setItem(
-      CHAVE_HISTORICO,
-      JSON.stringify(entradas),
-    );
+    localStorage.setItem(CHAVE_HISTORICO, JSON.stringify(entradas));
   } catch (erro) {
-    console.error(
-      "Erro ao salvar histórico local:",
-      erro,
-    );
+    console.error("Erro ao salvar histórico local:", erro);
   }
 }
 
@@ -153,80 +124,48 @@ function salvarHistoricoLocal(
 ========================= */
 
 function formatarNumero(valor: number) {
-  return Number(valor || 0).toLocaleString(
-    "pt-BR",
-    {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    },
-  );
+  return Number(valor || 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatarMoeda(valor: number) {
-  return Number(valor || 0).toLocaleString(
-    "pt-BR",
-    {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    },
-  );
+  return Number(valor || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatarData(data?: string) {
-  if (!data) {
-    return "Não informada";
-  }
+  if (!data) return "Não informada";
 
-  const dataNormalizada = data.includes("T")
-    ? data
-    : `${data}T00:00:00`;
+  const dataNormalizada = data.includes("T") ? data : `${data}T00:00:00`;
+  const dataConvertida = new Date(dataNormalizada);
 
-  const dataConvertida =
-    new Date(dataNormalizada);
+  if (Number.isNaN(dataConvertida.getTime())) return "Data inválida";
 
-  if (
-    Number.isNaN(
-      dataConvertida.getTime(),
-    )
-  ) {
-    return "Data inválida";
-  }
-
-  return dataConvertida.toLocaleDateString(
-    "pt-BR",
-    {
-      timeZone: "UTC",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    },
-  );
+  return dataConvertida.toLocaleDateString("pt-BR", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 /* =========================
    Funções auxiliares
 ========================= */
 
-function obterProduto(
-  produtoId: number,
-  produtos: Produto[],
-) {
-  return produtos.find(
-    (produto) =>
-      produto.id === produtoId,
-  );
+function obterProduto(produtoId: number, produtos: Produto[]) {
+  return produtos.find((produto) => produto.id === produtoId);
 }
 
-async function lerResposta(
-  resposta: Response,
-): Promise<unknown> {
+async function lerResposta(resposta: Response): Promise<unknown> {
   const texto = await resposta.text();
-
-  if (!texto) {
-    return null;
-  }
+  if (!texto) return null;
 
   try {
     return JSON.parse(texto);
@@ -235,39 +174,25 @@ async function lerResposta(
   }
 }
 
-function obterMensagemErro(
-  dados: unknown,
-  status: number,
-) {
-  if (
-    dados &&
-    typeof dados === "object" &&
-    "message" in dados
-  ) {
-    const erro =
-      dados as RespostaErroApi;
-
-    if (
-      Array.isArray(erro.message)
-    ) {
-      return erro.message.join(", ");
-    }
-
-    if (
-      typeof erro.message === "string"
-    ) {
-      return erro.message;
-    }
+function obterMensagemErro(dados: unknown, status: number) {
+  if (dados && typeof dados === "object" && "message" in dados) {
+    const erro = dados as RespostaErroApi;
+    if (Array.isArray(erro.message)) return erro.message.join(", ");
+    if (typeof erro.message === "string") return erro.message;
   }
 
-  if (
-    typeof dados === "string" &&
-    dados.trim().length > 0
-  ) {
-    return dados;
-  }
+  if (typeof dados === "string" && dados.trim().length > 0) return dados;
 
   return `Erro HTTP ${status}`;
+}
+
+async function lerLista<T>(
+  resultado: PromiseSettledResult<Response>,
+): Promise<T[] | null> {
+  if (resultado.status !== "fulfilled" || !resultado.value.ok) return null;
+
+  const dados: unknown = await resultado.value.json();
+  return Array.isArray(dados) ? (dados as T[]) : [];
 }
 
 /* =========================
@@ -275,443 +200,252 @@ function obterMensagemErro(
 ========================= */
 
 function Movimentacao() {
-  const [formulario, setFormulario] =
-    useState<FormularioEntrada>({
-      ...formularioInicial,
-    });
-
-  const [produtos, setProdutos] =
-    useState<Produto[]>([]);
-
-  const [estoque, setEstoque] =
-    useState<Produto[]>([]);
-
-  const [itensVenda, setItensVenda] =
-    useState<ItemVenda[]>([]);
-
-  const [
-    entradasSalvas,
-    setEntradasSalvas,
-  ] = useState<MovimentacaoVisual[]>(
+  const [formulario, setFormulario] = useState<FormularioEntrada>({
+    ...formularioInicial,
+  });
+  const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [estoque, setEstoque] = useState<Produto[]>([]);
+  const [itensVenda, setItensVenda] = useState<ItemVenda[]>([]);
+  const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
+  const [entradasSalvas, setEntradasSalvas] = useState<MovimentacaoVisual[]>(
     carregarHistoricoLocal,
   );
-
-  const [
-    entradaEmEdicao,
-    setEntradaEmEdicao,
-  ] = useState<string | null>(null);
-
-  const [carregando, setCarregando] =
-    useState(true);
-
-  const [salvando, setSalvando] =
-    useState(false);
-
-  const [mensagem, setMensagem] =
-    useState<Mensagem | null>(null);
-
-  const [busca, setBusca] =
-    useState("");
-
-  const [
-    filtroTipo,
-    setFiltroTipo,
-  ] = useState<
-    "todos" | TipoMovimentacao
-  >("todos");
+  const [entradaEmEdicao, setEntradaEmEdicao] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [mensagem, setMensagem] = useState<Mensagem | null>(null);
+  const [busca, setBusca] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | TipoMovimentacao>(
+    "todos",
+  );
 
   /* =========================
      Produto selecionado
   ========================= */
 
-  const produtoSelecionado =
-    useMemo(() => {
-      const produtoId = Number(
-        formulario.produto_id,
-      );
+  const produtoSelecionado = useMemo(() => {
+    const produtoId = Number(formulario.produto_id);
+    if (!produtoId) return undefined;
+    return produtos.find((produto) => produto.id === produtoId);
+  }, [formulario.produto_id, produtos]);
 
-      if (!produtoId) {
-        return undefined;
-      }
+  const precoUnitario = Number(produtoSelecionado?.preco ?? 0);
+  const categoriaProduto = produtoSelecionado?.tipo ?? "Selecione um produto";
+  const quantidadeInformada = Number(formulario.quantidade || 0);
 
-      return produtos.find(
-        (produto) =>
-          produto.id === produtoId,
-      );
-    }, [
-      formulario.produto_id,
-      produtos,
-    ]);
-
-  const precoUnitario = Number(
-    produtoSelecionado?.preco ?? 0,
+  const valorTotalFormulario = useMemo(
+    () => Number((quantidadeInformada * precoUnitario).toFixed(2)),
+    [quantidadeInformada, precoUnitario],
   );
-
-  const categoriaProduto =
-    produtoSelecionado?.tipo ??
-    "Selecione um produto";
-
-  const quantidadeInformada = Number(
-    formulario.quantidade || 0,
-  );
-
-  const valorTotalFormulario =
-    useMemo(() => {
-      const valor =
-        quantidadeInformada *
-        precoUnitario;
-
-      return Number(
-        valor.toFixed(2),
-      );
-    }, [
-      quantidadeInformada,
-      precoUnitario,
-    ]);
 
   /* =========================
      Resumos
   ========================= */
 
-  const totalUnidadesEstoque =
-    useMemo(() => {
-      return estoque.reduce(
-        (total, produto) =>
-          total +
-          Number(
-            produto.quantidade || 0,
-          ),
+  const totalUnidadesEstoque = useMemo(
+    () =>
+      estoque.reduce(
+        (total, produto) => total + Number(produto.quantidade || 0),
         0,
-      );
-    }, [estoque]);
+      ),
+    [estoque],
+  );
 
-  const totalUnidadesVendidas =
-    useMemo(() => {
-      return itensVenda.reduce(
-        (total, item) =>
-          total +
-          Number(
-            item.quantidade || 0,
-          ),
+  const totalUnidadesVendidas = useMemo(
+    () =>
+      itensVenda.reduce(
+        (total, item) => total + Number(item.quantidade || 0),
         0,
-      );
-    }, [itensVenda]);
+      ),
+    [itensVenda],
+  );
 
   /* =========================
      Saídas do Atendimento
+     (cada item vendido em /itemvenda vira uma saída)
   ========================= */
 
-  const saidasAtendimento =
-    useMemo<
-      MovimentacaoVisual[]
-    >(() => {
-      return itensVenda.map(
-        (item) => {
-          const quantidade = Number(
-            item.quantidade || 0,
-          );
+  const dataPorVenda = useMemo(() => {
+    const mapa = new Map<number, string>();
+    pagamentos.forEach((pagamento) => {
+      if (pagamento.data_pagamento) {
+        mapa.set(Number(pagamento.vendas_id), pagamento.data_pagamento);
+      }
+    });
+    return mapa;
+  }, [pagamentos]);
 
-          const preco = Number(
-            item.preco || 0,
-          );
-
-          return {
-            id: `saida-${item.id}`,
-            tipo: "saida",
-            produto_id:
-              item.produtos_id,
-            quantidade,
-            preco_unitario: Number(
-              preco.toFixed(2),
-            ),
-            descricao:
-              `Saída gerada pela venda #${item.vendas_id}`,
-            venda_id:
-              item.vendas_id,
-          };
-        },
-      );
-    }, [itensVenda]);
+  const saidasAtendimento = useMemo<MovimentacaoVisual[]>(() => {
+    return [...itensVenda]
+      .sort((a, b) => b.id - a.id) // mais recentes primeiro
+      .map((item) => ({
+        id: `saida-${item.id}`,
+        tipo: "saida" as const,
+        produto_id: item.produtos_id,
+        quantidade: Number(item.quantidade || 0),
+        preco_unitario: Number(Number(item.preco || 0).toFixed(2)),
+        descricao: `Saída gerada pela venda #${item.vendas_id}`,
+        data_movimentacao: dataPorVenda.get(Number(item.vendas_id)),
+        venda_id: item.vendas_id,
+      }));
+  }, [itensVenda, dataPorVenda]);
 
   /* =========================
      Histórico completo
   ========================= */
 
-  const historicoCompleto =
-    useMemo(() => {
-      return [
-        ...entradasSalvas,
-        ...saidasAtendimento,
-      ];
-    }, [
-      entradasSalvas,
-      saidasAtendimento,
-    ]);
+  const historicoCompleto = useMemo(
+    () => [...entradasSalvas, ...saidasAtendimento],
+    [entradasSalvas, saidasAtendimento],
+  );
 
-  const historicoFiltrado =
-    useMemo(() => {
-      const termo = busca
-        .trim()
+  const historicoFiltrado = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    return historicoCompleto.filter((movimentacao) => {
+      const correspondeTipo =
+        filtroTipo === "todos" || movimentacao.tipo === filtroTipo;
+
+      const produto = obterProduto(movimentacao.produto_id, produtos);
+
+      const textoPesquisa = [produto?.nome, produto?.tipo, movimentacao.descricao]
+        .filter(Boolean)
+        .join(" ")
         .toLowerCase();
 
-      return historicoCompleto.filter(
-        (movimentacao) => {
-          const correspondeTipo =
-            filtroTipo === "todos" ||
-            movimentacao.tipo ===
-              filtroTipo;
+      const correspondeBusca =
+        termo.length === 0 || textoPesquisa.includes(termo);
 
-          const produto =
-            obterProduto(
-              movimentacao.produto_id,
-              produtos,
-            );
-
-          const textoPesquisa = [
-            produto?.nome,
-            produto?.tipo,
-            movimentacao.descricao,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-
-          const correspondeBusca =
-            termo.length === 0 ||
-            textoPesquisa.includes(
-              termo,
-            );
-
-          return (
-            correspondeTipo &&
-            correspondeBusca
-          );
-        },
-      );
-    }, [
-      busca,
-      filtroTipo,
-      historicoCompleto,
-      produtos,
-    ]);
+      return correspondeTipo && correspondeBusca;
+    });
+  }, [busca, filtroTipo, historicoCompleto, produtos]);
 
   /* =========================
      Carregamento da API
   ========================= */
 
-  const carregarDados =
-    useCallback(async () => {
-      try {
-        setCarregando(true);
-        setMensagem(null);
+  const carregarDados = useCallback(async (limparMensagem = true) => {
+    try {
+      setCarregando(true);
+      if (limparMensagem) setMensagem(null);
 
-        const resultados =
-          await Promise.allSettled([
-            fetch(
-              `${API_URL}/produtos`,
-            ),
-            fetch(
-              `${API_URL}/estoque`,
-            ),
-            fetch(
-              `${API_URL}/itemvenda`,
-            ),
-          ]);
+      const [
+        resultadoProdutos,
+        resultadoEstoque,
+        resultadoItens,
+        resultadoPagamentos,
+      ] = await Promise.allSettled([
+        fetch(`${API_URL}/produtos`),
+        fetch(`${API_URL}/estoque`),
+        fetch(`${API_URL}/itemvenda`),
+        fetch(`${API_URL}/pagamentos`),
+      ]);
 
-        const [
-          resultadoProdutos,
-          resultadoEstoque,
-          resultadoItens,
-        ] = resultados;
+      const listaProdutos = await lerLista<Produto>(resultadoProdutos);
+      if (listaProdutos === null) {
+        throw new Error("Não foi possível carregar os produtos.");
+      }
+      setProdutos(listaProdutos);
 
-        if (
-          resultadoProdutos.status ===
-            "fulfilled" &&
-          resultadoProdutos.value.ok
-        ) {
-          const dados: unknown =
-            await resultadoProdutos.value.json();
+      // Se a rota /estoque não existir, usa a quantidade dos próprios produtos
+      const listaEstoque = await lerLista<Produto>(resultadoEstoque);
+      setEstoque(listaEstoque ?? listaProdutos);
 
-          setProdutos(
-            Array.isArray(dados)
-              ? (dados as Produto[])
-              : [],
-          );
-        } else {
-          throw new Error(
-            "Não foi possível carregar os produtos.",
-          );
-        }
-
-        if (
-          resultadoEstoque.status ===
-            "fulfilled" &&
-          resultadoEstoque.value.ok
-        ) {
-          const dados: unknown =
-            await resultadoEstoque.value.json();
-
-          setEstoque(
-            Array.isArray(dados)
-              ? (dados as Produto[])
-              : [],
-          );
-        }
-
-        if (
-          resultadoItens.status ===
-            "fulfilled" &&
-          resultadoItens.value.ok
-        ) {
-          const dados: unknown =
-            await resultadoItens.value.json();
-
-          setItensVenda(
-            Array.isArray(dados)
-              ? (dados as ItemVenda[])
-              : [],
-          );
-        }
-      } catch (erro) {
-        console.error(
-          "Erro ao carregar dados:",
-          erro,
-        );
-
+      const listaItens = await lerLista<ItemVenda>(resultadoItens);
+      if (listaItens === null) {
+        setItensVenda([]);
         setMensagem({
           tipo: "erro",
-
-          texto:
-            erro instanceof Error
-              ? erro.message
-              : "Não foi possível carregar os dados.",
+          texto: "Não foi possível carregar as saídas (GET /itemvenda).",
         });
-      } finally {
-        setCarregando(false);
+      } else {
+        setItensVenda(listaItens);
       }
-    }, []);
+
+      // As datas das saídas vêm dos pagamentos; se falhar, só fica sem data
+      const listaPagamentos = await lerLista<Pagamento>(resultadoPagamentos);
+      setPagamentos(listaPagamentos ?? []);
+    } catch (erro) {
+      console.error("Erro ao carregar dados:", erro);
+
+      setMensagem({
+        tipo: "erro",
+        texto:
+          erro instanceof Error
+            ? erro.message
+            : "Não foi possível carregar os dados.",
+      });
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
 
   useEffect(() => {
     void carregarDados();
   }, [carregarDados]);
 
-  /*
-    Sempre que as entradas forem alteradas,
-    o histórico é salvo no navegador.
-  */
-
+  // Sempre que as entradas forem alteradas, o histórico é salvo no navegador
   useEffect(() => {
-    salvarHistoricoLocal(
-      entradasSalvas,
-    );
+    salvarHistoricoLocal(entradasSalvas);
   }, [entradasSalvas]);
 
   /* =========================
      Formulário
   ========================= */
 
-function alterarCampo(
-  campo: keyof FormularioEntrada,
-  novoValor: string,
-) {
-  setFormulario((dadosAtuais) => ({
-    ...dadosAtuais,
-    [campo]: novoValor,
-  }));
+  function alterarCampo(campo: keyof FormularioEntrada, novoValor: string) {
+    setFormulario((dadosAtuais) => ({
+      ...dadosAtuais,
+      [campo]: novoValor,
+    }));
 
-  setMensagem(null);
-}
+    setMensagem(null);
+  }
 
   function limparFormulario() {
     setFormulario({
       ...formularioInicial,
-
-      data_movimentacao:
-        obterDataAtual(),
+      data_movimentacao: obterDataAtual(),
     });
 
     setEntradaEmEdicao(null);
     setMensagem(null);
   }
 
-  function editarEntrada(
-    movimentacao:
-      MovimentacaoVisual,
-  ) {
-    if (
-      movimentacao.tipo !==
-      "entrada"
-    ) {
-      return;
-    }
+  function editarEntrada(movimentacao: MovimentacaoVisual) {
+    if (movimentacao.tipo !== "entrada") return;
 
     setFormulario({
-      produto_id: String(
-        movimentacao.produto_id,
-      ),
-
-      quantidade: String(
-        movimentacao.quantidade,
-      ),
-
-      descricao:
-        movimentacao.descricao,
-
-      data_movimentacao:
-        movimentacao.data_movimentacao ??
-        obterDataAtual(),
+      produto_id: String(movimentacao.produto_id),
+      quantidade: String(movimentacao.quantidade),
+      descricao: movimentacao.descricao,
+      data_movimentacao: movimentacao.data_movimentacao ?? obterDataAtual(),
     });
 
-    setEntradaEmEdicao(
-      movimentacao.id,
-    );
-
+    setEntradaEmEdicao(movimentacao.id);
     setMensagem(null);
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   /* =========================
      POST /estoque
   ========================= */
 
-  async function cadastrarEntrada(
-    produtoId: number,
-    quantidade: number,
-  ) {
-    const resposta = await fetch(
-      `${API_URL}/estoque`,
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          Accept:
-            "application/json",
-        },
-
-        body: JSON.stringify({
-          produto_id: produtoId,
-          quantidade,
-        }),
+  async function cadastrarEntrada(produtoId: number, quantidade: number) {
+    const resposta = await fetch(`${API_URL}/estoque`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-    );
+      body: JSON.stringify({ produto_id: produtoId, quantidade }),
+    });
 
-    const dadosResposta =
-      await lerResposta(resposta);
+    const dadosResposta = await lerResposta(resposta);
 
     if (!resposta.ok) {
-      throw new Error(
-        obterMensagemErro(
-          dadosResposta,
-          resposta.status,
-        ),
-      );
+      throw new Error(obterMensagemErro(dadosResposta, resposta.status));
     }
   }
 
@@ -719,41 +453,23 @@ function alterarCampo(
      PATCH /estoque/{id}
   ========================= */
 
-  async function atualizarEstoque(
-    produtoId: number,
-    novaQuantidade: number,
-  ) {
-    const resposta = await fetch(
-      `${API_URL}/estoque/${produtoId}`,
-      {
-        method: "PATCH",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          Accept:
-            "application/json",
-        },
-
-        body: JSON.stringify({
-          produto_id: produtoId,
-          quantidade:
-            novaQuantidade,
-        }),
+  async function atualizarEstoque(produtoId: number, novaQuantidade: number) {
+    const resposta = await fetch(`${API_URL}/estoque/${produtoId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-    );
+      body: JSON.stringify({
+        produto_id: produtoId,
+        quantidade: novaQuantidade,
+      }),
+    });
 
-    const dadosResposta =
-      await lerResposta(resposta);
+    const dadosResposta = await lerResposta(resposta);
 
     if (!resposta.ok) {
-      throw new Error(
-        obterMensagemErro(
-          dadosResposta,
-          resposta.status,
-        ),
-      );
+      throw new Error(obterMensagemErro(dadosResposta, resposta.status));
     }
   }
 
@@ -761,59 +477,30 @@ function alterarCampo(
      Salvar
   ========================= */
 
-  async function salvarEntrada(
-    evento:
-      FormEvent<HTMLFormElement>,
-  ) {
+  async function salvarEntrada(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
 
-    const produtoId = Number(
-      formulario.produto_id,
-    );
+    const produtoId = Number(formulario.produto_id);
+    const quantidade = Number(formulario.quantidade);
 
-    const quantidade = Number(
-      formulario.quantidade,
-    );
-
-    if (
-      !Number.isInteger(
-        produtoId,
-      ) ||
-      produtoId <= 0
-    ) {
-      setMensagem({
-        tipo: "erro",
-        texto:
-          "Selecione um produto.",
-      });
-
+    if (!Number.isInteger(produtoId) || produtoId <= 0) {
+      setMensagem({ tipo: "erro", texto: "Selecione um produto." });
       return;
     }
 
-    if (
-      !Number.isInteger(
-        quantidade,
-      ) ||
-      quantidade <= 0
-    ) {
+    if (!Number.isInteger(quantidade) || quantidade <= 0) {
       setMensagem({
         tipo: "erro",
-
-        texto:
-          "Informe uma quantidade inteira maior que zero.",
+        texto: "Informe uma quantidade inteira maior que zero.",
       });
-
       return;
     }
 
     if (!produtoSelecionado) {
       setMensagem({
         tipo: "erro",
-
-        texto:
-          "O produto selecionado não foi encontrado.",
+        texto: "O produto selecionado não foi encontrado.",
       });
-
       return;
     }
 
@@ -821,167 +508,84 @@ function alterarCampo(
       setSalvando(true);
       setMensagem(null);
 
-      /*
-        Edição de uma entrada já salva
-        no histórico local.
-      */
+      let textoSucesso = "Entrada registrada com sucesso.";
 
-      if (
-        entradaEmEdicao !== null
-      ) {
-        const entradaAnterior =
-          entradasSalvas.find(
-            (entrada) =>
-              entrada.id ===
-              entradaEmEdicao,
-          );
+      if (entradaEmEdicao !== null) {
+        // Edição de uma entrada já salva no histórico local
+        const entradaAnterior = entradasSalvas.find(
+          (entrada) => entrada.id === entradaEmEdicao,
+        );
 
         if (!entradaAnterior) {
-          throw new Error(
-            "A entrada selecionada não foi encontrada.",
-          );
+          throw new Error("A entrada selecionada não foi encontrada.");
         }
 
-        const diferenca =
-          quantidade -
-          entradaAnterior.quantidade;
+        const diferenca = quantidade - entradaAnterior.quantidade;
 
-        const produtoNoEstoque =
-          estoque.find(
-            (produto) =>
-              produto.id ===
-              produtoId,
-          );
+        const produtoNoEstoque = estoque.find(
+          (produto) => produto.id === produtoId,
+        );
 
-        const quantidadeAtual =
-          Number(
-            produtoNoEstoque
-              ?.quantidade ?? 0,
-          );
+        const quantidadeAtual = Number(produtoNoEstoque?.quantidade ?? 0);
+        const novaQuantidadeEstoque = quantidadeAtual + diferenca;
 
-        const novaQuantidadeEstoque =
-          quantidadeAtual +
-          diferenca;
-
-        if (
-          novaQuantidadeEstoque < 0
-        ) {
-          throw new Error(
-            "A alteração deixaria o estoque negativo.",
-          );
+        if (novaQuantidadeEstoque < 0) {
+          throw new Error("A alteração deixaria o estoque negativo.");
         }
 
-        await atualizarEstoque(
-          produtoId,
-          novaQuantidadeEstoque,
-        );
+        await atualizarEstoque(produtoId, novaQuantidadeEstoque);
 
-        setEntradasSalvas(
-          (entradasAtuais) =>
-            entradasAtuais.map(
-              (entrada) =>
-                entrada.id ===
-                entradaEmEdicao
-                  ? {
-                      ...entrada,
-
-                      quantidade,
-
-                      preco_unitario:
-                        Number(
-                          precoUnitario.toFixed(
-                            2,
-                          ),
-                        ),
-
-                      descricao:
-                        formulario.descricao.trim() ||
-                        "Entrada de produto no estoque",
-
-                      data_movimentacao:
-                        formulario.data_movimentacao,
-                    }
-                  : entrada,
-            ),
-        );
-
-        setMensagem({
-          tipo: "sucesso",
-
-          texto:
-            "Entrada atualizada com sucesso.",
-        });
-      } else {
-        /*
-          Nova entrada.
-        */
-
-        await cadastrarEntrada(
-          produtoId,
-          quantidade,
-        );
-
-        const novaEntrada:
-          MovimentacaoVisual = {
-          id: `entrada-${Date.now()}`,
-
-          tipo: "entrada",
-
-          produto_id: produtoId,
-
-          quantidade,
-
-          preco_unitario: Number(
-            precoUnitario.toFixed(2),
+        setEntradasSalvas((entradasAtuais) =>
+          entradasAtuais.map((entrada) =>
+            entrada.id === entradaEmEdicao
+              ? {
+                  ...entrada,
+                  quantidade,
+                  preco_unitario: Number(precoUnitario.toFixed(2)),
+                  descricao:
+                    formulario.descricao.trim() ||
+                    "Entrada de produto no estoque",
+                  data_movimentacao: formulario.data_movimentacao,
+                }
+              : entrada,
           ),
+        );
 
+        textoSucesso = "Entrada atualizada com sucesso.";
+      } else {
+        // Nova entrada
+        await cadastrarEntrada(produtoId, quantidade);
+
+        const novaEntrada: MovimentacaoVisual = {
+          id: `entrada-${Date.now()}`,
+          tipo: "entrada",
+          produto_id: produtoId,
+          quantidade,
+          preco_unitario: Number(precoUnitario.toFixed(2)),
           descricao:
-            formulario.descricao.trim() ||
-            "Entrada de produto no estoque",
-
-          data_movimentacao:
-            formulario.data_movimentacao,
+            formulario.descricao.trim() || "Entrada de produto no estoque",
+          data_movimentacao: formulario.data_movimentacao,
         };
 
-        setEntradasSalvas(
-          (entradasAtuais) => [
-            novaEntrada,
-            ...entradasAtuais,
-          ],
-        );
-
-        setMensagem({
-          tipo: "sucesso",
-
-          texto:
-            "Entrada registrada com sucesso.",
-        });
+        setEntradasSalvas((entradasAtuais) => [novaEntrada, ...entradasAtuais]);
       }
 
-      /*
-        Recarrega a quantidade oficial
-        diretamente da API.
-      */
+      // Recarrega os dados oficiais da API sem apagar a mensagem de sucesso
+      await carregarDados(false);
 
-      await carregarDados();
+      setMensagem({ tipo: "sucesso", texto: textoSucesso });
 
       setFormulario({
         ...formularioInicial,
-
-        data_movimentacao:
-          obterDataAtual(),
+        data_movimentacao: obterDataAtual(),
       });
 
       setEntradaEmEdicao(null);
     } catch (erro) {
-      console.error(
-        "Erro ao salvar entrada:",
-        erro,
-      );
+      console.error("Erro ao salvar entrada:", erro);
 
       setMensagem({
         tipo: "erro",
-
         texto:
           erro instanceof Error
             ? erro.message
@@ -1000,17 +604,14 @@ function alterarCampo(
     <section className="fluxo-caixa">
       <header className="fluxo-cabecalho">
         <div className="fluxo-cabecalho-texto">
-          <span className="fluxo-cabecalho-icone">
-            ↕
-          </span>
+          <span className="fluxo-cabecalho-icone">↕</span>
 
           <div>
-            <h1 className="medium-h1">
-              Movimentação de estoque
-            </h1>
+            <h1 className="medium-h1">Movimentação de estoque</h1>
 
             <p className="light-h3">
-              Registre entradas e acompanhe as saídas realizadas pelo atendimento.
+              Registre entradas e acompanhe as saídas realizadas pelo
+              atendimento.
             </p>
           </div>
         </div>
@@ -1018,67 +619,56 @@ function alterarCampo(
         <button
           type="button"
           className="fluxo-botao-atualizar medium-h3"
-          onClick={() =>
-            void carregarDados()
-          }
-          disabled={
-            carregando || salvando
-          }
+          onClick={() => void carregarDados()}
+          disabled={carregando || salvando}
         >
-          {carregando
-            ? "Atualizando..."
-            : "Atualizar dados"}
+          {carregando ? "Atualizando..." : "Atualizar dados"}
         </button>
       </header>
 
       <div className="fluxo-resumo">
         <article className="fluxo-resumo-card fluxo-resumo-entrada">
           <div className="fluxo-resumo-topo">
-            <span className="fluxo-resumo-icone">
-              +
-            </span>
-
-            <span className="light-h3">
-              Unidades em estoque
-            </span>
+            <span className="fluxo-resumo-icone">+</span>
+            <span className="light-h3">Unidades em estoque</span>
           </div>
 
           <strong className="bold-h2">
-            {formatarNumero(
-              totalUnidadesEstoque,
-            )}
+            {formatarNumero(totalUnidadesEstoque)}
           </strong>
 
-          <small>
-            Soma atual das unidades disponíveis
-          </small>
+          <small>Soma atual das unidades disponíveis</small>
         </article>
 
         <article className="fluxo-resumo-card fluxo-resumo-saida">
           <div className="fluxo-resumo-topo">
-            <span className="fluxo-resumo-icone">
-              −
-            </span>
-
-            <span className="light-h3">
-              Unidades vendidas
-            </span>
+            <span className="fluxo-resumo-icone">−</span>
+            <span className="light-h3">Unidades vendidas</span>
           </div>
 
           <strong className="bold-h2">
-            {formatarNumero(
-              totalUnidadesVendidas,
-            )}
+            {formatarNumero(totalUnidadesVendidas)}
           </strong>
 
-          <small>
-            Saídas registradas pelo atendimento
-          </small>
+          <small>Saídas registradas pelo atendimento</small>
         </article>
       </div>
 
-      {/* Formulário */}
+      {/* Mensagem fora do formulário para aparecer também ao carregar */}
+      {mensagem && !carregando && (
+        <div
+          className={`fluxo-mensagem ${
+            mensagem.tipo === "sucesso"
+              ? "fluxo-mensagem-sucesso"
+              : "fluxo-mensagem-erro"
+          }`}
+          role="alert"
+        >
+          {mensagem.texto}
+        </div>
+      )}
 
+      {/* Formulário */}
       <article className="fluxo-painel">
         <div className="fluxo-painel-cabecalho">
           <div>
@@ -1096,36 +686,21 @@ function alterarCampo(
           </div>
 
           {entradaEmEdicao !== null && (
-            <span className="fluxo-status-edicao medium-h3">
-              Em edição
-            </span>
+            <span className="fluxo-status-edicao medium-h3">Em edição</span>
           )}
         </div>
 
-        <form
-          className="fluxo-formulario"
-          onSubmit={salvarEntrada}
-        >
+        <form className="fluxo-formulario" onSubmit={salvarEntrada}>
           <div className="fluxo-campos">
             <label className="fluxo-campo">
-              <span className="medium-h3">
-                Produto
-              </span>
+              <span className="medium-h3">Produto</span>
 
               <select
-                value={
-                  formulario.produto_id
-                }
+                value={formulario.produto_id}
                 onChange={(evento) =>
-                  alterarCampo(
-                    "produto_id",
-                    evento.target.value,
-                  )
+                  alterarCampo("produto_id", evento.target.value)
                 }
-                disabled={
-                  carregando ||
-                  entradaEmEdicao !== null
-                }
+                disabled={carregando || entradaEmEdicao !== null}
                 required
               >
                 <option value="">
@@ -1134,38 +709,24 @@ function alterarCampo(
                     : "Selecione um produto"}
                 </option>
 
-                {produtos.map(
-                  (produto) => (
-                    <option
-                      key={produto.id}
-                      value={String(
-                        produto.id,
-                      )}
-                    >
-                      {produto.nome}
-                    </option>
-                  ),
-                )}
+                {produtos.map((produto) => (
+                  <option key={produto.id} value={String(produto.id)}>
+                    {produto.nome}
+                  </option>
+                ))}
               </select>
             </label>
 
             <label className="fluxo-campo">
-              <span className="medium-h3">
-                Quantidade recebida
-              </span>
+              <span className="medium-h3">Quantidade recebida</span>
 
               <input
                 type="number"
                 min="1"
                 step="1"
-                value={
-                  formulario.quantidade
-                }
+                value={formulario.quantidade}
                 onChange={(evento) =>
-                  alterarCampo(
-                    "quantidade",
-                    evento.target.value,
-                  )
+                  alterarCampo("quantidade", evento.target.value)
                 }
                 placeholder="Ex.: 10"
                 required
@@ -1173,108 +734,63 @@ function alterarCampo(
             </label>
 
             <label className="fluxo-campo">
-              <span className="medium-h3">
-                Data da entrada
-              </span>
+              <span className="medium-h3">Data da entrada</span>
 
               <input
                 type="date"
-                value={
-                  formulario.data_movimentacao
-                }
+                value={formulario.data_movimentacao}
                 onChange={(evento) =>
-                  alterarCampo(
-                    "data_movimentacao",
-                    evento.target.value,
-                  )
+                  alterarCampo("data_movimentacao", evento.target.value)
                 }
                 required
               />
             </label>
 
             <div className="fluxo-campo">
-              <span className="medium-h3">
-                Categoria
-              </span>
-
-              <div className="fluxo-informacao">
-                {categoriaProduto}
-              </div>
+              <span className="medium-h3">Categoria</span>
+              <div className="fluxo-informacao">{categoriaProduto}</div>
             </div>
 
             <div className="fluxo-campo">
-              <span className="medium-h3">
-                Preço unitário
-              </span>
+              <span className="medium-h3">Preço unitário</span>
 
               <div className="fluxo-informacao">
                 {produtoSelecionado
-                  ? formatarMoeda(
-                      precoUnitario,
-                    )
+                  ? formatarMoeda(precoUnitario)
                   : "Selecione um produto"}
               </div>
             </div>
 
             <div className="fluxo-campo">
-              <span className="medium-h3">
-                Valor total
-              </span>
+              <span className="medium-h3">Valor total</span>
 
               <div className="fluxo-informacao fluxo-informacao-valor">
-                {formatarMoeda(
-                  valorTotalFormulario,
-                )}
+                {formatarMoeda(valorTotalFormulario)}
               </div>
             </div>
 
             <label className="fluxo-campo fluxo-campo-descricao">
-              <span className="medium-h3">
-                Descrição
-              </span>
+              <span className="medium-h3">Descrição</span>
 
               <textarea
                 rows={3}
-                value={
-                  formulario.descricao
-                }
+                value={formulario.descricao}
                 onChange={(evento) =>
-                  alterarCampo(
-                    "descricao",
-                    evento.target.value,
-                  )
+                  alterarCampo("descricao", evento.target.value)
                 }
                 placeholder="Ex.: Reposição do estoque"
               />
             </label>
           </div>
 
-          {mensagem && (
-            <div
-              className={`fluxo-mensagem ${
-                mensagem.tipo ===
-                "sucesso"
-                  ? "fluxo-mensagem-sucesso"
-                  : "fluxo-mensagem-erro"
-              }`}
-              role="alert"
-            >
-              {mensagem.texto}
-            </div>
-          )}
-
           <div className="fluxo-acoes">
             <button
               type="button"
               className="fluxo-botao-cancelar medium-h3"
-              onClick={
-                limparFormulario
-              }
+              onClick={limparFormulario}
               disabled={salvando}
             >
-              {entradaEmEdicao !== null
-                ? "Cancelar edição"
-                : "Limpar"}
+              {entradaEmEdicao !== null ? "Cancelar edição" : "Limpar"}
             </button>
 
             <button
@@ -1284,8 +800,7 @@ function alterarCampo(
             >
               {salvando
                 ? "Salvando..."
-                : entradaEmEdicao !==
-                    null
+                : entradaEmEdicao !== null
                   ? "Atualizar entrada"
                   : "Registrar entrada"}
             </button>
@@ -1294,16 +809,14 @@ function alterarCampo(
       </article>
 
       {/* Histórico */}
-
       <article className="fluxo-painel">
         <div className="fluxo-historico-topo">
           <div>
-            <h2 className="medium-h2">
-              Histórico de movimentações
-            </h2>
+            <h2 className="medium-h2">Histórico de movimentações</h2>
 
             <p className="light-h3">
-              As entradas ficam salvas neste navegador.
+              As entradas ficam salvas neste navegador. As saídas vêm das
+              vendas do atendimento.
             </p>
           </div>
 
@@ -1311,11 +824,7 @@ function alterarCampo(
             <input
               type="search"
               value={busca}
-              onChange={(evento) =>
-                setBusca(
-                  evento.target.value,
-                )
-              }
+              onChange={(evento) => setBusca(evento.target.value)}
               placeholder="Buscar produto"
               aria-label="Buscar produto"
             />
@@ -1323,25 +832,13 @@ function alterarCampo(
             <select
               value={filtroTipo}
               onChange={(evento) =>
-                setFiltroTipo(
-                  evento.target.value as
-                    | "todos"
-                    | TipoMovimentacao,
-                )
+                setFiltroTipo(evento.target.value as "todos" | TipoMovimentacao)
               }
               aria-label="Filtrar movimentações"
             >
-              <option value="todos">
-                Todas
-              </option>
-
-              <option value="entrada">
-                Entradas
-              </option>
-
-              <option value="saida">
-                Saídas
-              </option>
+              <option value="todos">Todas</option>
+              <option value="entrada">Entradas</option>
+              <option value="saida">Saídas</option>
             </select>
           </div>
         </div>
@@ -1351,179 +848,106 @@ function alterarCampo(
             <thead>
               <tr>
                 <th>Movimentação</th>
-
                 <th>Produto</th>
-
                 <th>Categoria</th>
-
                 <th>Descrição</th>
-
                 <th>Data</th>
-
                 <th>Quantidade</th>
-
-                <th>
-                  Preço unitário
-                </th>
-
+                <th>Preço unitário</th>
                 <th>Valor total</th>
-
-                <th className="fluxo-coluna-acoes">
-                  Ações
-                </th>
+                <th className="fluxo-coluna-acoes">Ações</th>
               </tr>
             </thead>
 
             <tbody>
               {carregando ? (
                 <tr>
-                  <td
-                    colSpan={9}
-                    className="fluxo-tabela-vazia"
-                  >
+                  <td colSpan={9} className="fluxo-tabela-vazia">
                     Carregando dados...
                   </td>
                 </tr>
-              ) : historicoFiltrado.length ===
-                0 ? (
+              ) : historicoFiltrado.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={9}
-                    className="fluxo-tabela-vazia"
-                  >
+                  <td colSpan={9} className="fluxo-tabela-vazia">
                     Nenhuma movimentação encontrada.
                   </td>
                 </tr>
               ) : (
-                historicoFiltrado.map(
-                  (movimentacao) => {
-                    const produto =
-                      obterProduto(
-                        movimentacao.produto_id,
-                        produtos,
-                      );
+                historicoFiltrado.map((movimentacao) => {
+                  const produto = obterProduto(
+                    movimentacao.produto_id,
+                    produtos,
+                  );
 
-                    const nomeProduto =
-                      produto?.nome ??
-                      `Produto #${movimentacao.produto_id}`;
+                  const nomeProduto =
+                    produto?.nome ?? `Produto #${movimentacao.produto_id}`;
 
-                    const categoria =
-                      produto?.tipo ??
-                      "Não informada";
+                  const categoria = produto?.tipo ?? "Não informada";
 
-                    const valorTotal =
-                      Number(
-                        (
-                          movimentacao.quantidade *
-                          movimentacao.preco_unitario
-                        ).toFixed(2),
-                      );
+                  const valorTotal = Number(
+                    (
+                      movimentacao.quantidade * movimentacao.preco_unitario
+                    ).toFixed(2),
+                  );
 
-                    const estaEmEdicao =
-                      entradaEmEdicao ===
-                      movimentacao.id;
+                  const estaEmEdicao = entradaEmEdicao === movimentacao.id;
 
-                    return (
-                      <tr
-                        key={
-                          movimentacao.id
-                        }
-                        className={
-                          estaEmEdicao
-                            ? "fluxo-linha-em-edicao"
-                            : ""
-                        }
-                      >
-                        <td>
-                          <span
-                            className={`fluxo-status fluxo-status-${movimentacao.tipo}`}
-                          >
-                            {movimentacao.tipo ===
-                            "entrada"
-                              ? "Entrada"
-                              : "Saída"}
+                  return (
+                    <tr
+                      key={movimentacao.id}
+                      className={estaEmEdicao ? "fluxo-linha-em-edicao" : ""}
+                    >
+                      <td>
+                        <span
+                          className={`fluxo-status fluxo-status-${movimentacao.tipo}`}
+                        >
+                          {movimentacao.tipo === "entrada"
+                            ? "Entrada"
+                            : "Saída"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div className="fluxo-produto">
+                          <span className="fluxo-produto-avatar">
+                            {nomeProduto.charAt(0).toUpperCase()}
                           </span>
-                        </td>
 
-                        <td>
-                          <div className="fluxo-produto">
-                            <span className="fluxo-produto-avatar">
-                              {nomeProduto
-                                .charAt(0)
-                                .toUpperCase()}
-                            </span>
+                          <strong>{nomeProduto}</strong>
+                        </div>
+                      </td>
 
-                            <strong>
-                              {nomeProduto}
-                            </strong>
-                          </div>
-                        </td>
+                      <td>{categoria}</td>
+                      <td>{movimentacao.descricao}</td>
+                      <td>{formatarData(movimentacao.data_movimentacao)}</td>
 
-                        <td>
-                          {categoria}
-                        </td>
+                      <td>{formatarNumero(movimentacao.quantidade)} un.</td>
+                      <td>{formatarMoeda(movimentacao.preco_unitario)}</td>
 
-                        <td>
-                          {
-                            movimentacao.descricao
-                          }
-                        </td>
+                      <td className="fluxo-valor-total">
+                        {formatarMoeda(valorTotal)}
+                      </td>
 
-                        <td>
-                          {formatarData(
-                            movimentacao.data_movimentacao,
+                      <td>
+                        <div className="fluxo-acoes-linha">
+                          {movimentacao.tipo === "entrada" ? (
+                            <button
+                              type="button"
+                              className="fluxo-acao fluxo-editar"
+                              onClick={() => editarEntrada(movimentacao)}
+                              aria-label={`Editar entrada de ${nomeProduto}`}
+                              title="Editar entrada"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                          ) : (
+                            <span className="fluxo-sem-acao">Automática</span>
                           )}
-                        </td>
-
-                        <td>
-                          {formatarNumero(
-                            movimentacao.quantidade,
-                          )}{" "}
-                          un.
-                        </td>
-
-                        <td>
-                          {formatarMoeda(
-                            movimentacao.preco_unitario,
-                          )}
-                        </td>
-
-                        <td className="fluxo-valor-total">
-                          {formatarMoeda(
-                            valorTotal,
-                          )}
-                        </td>
-
-                        <td>
-                          <div className="fluxo-acoes-linha">
-                            {movimentacao.tipo ===
-                            "entrada" ? (
-                              <button
-                                type="button"
-                                className="fluxo-acao fluxo-editar"
-                                onClick={() =>
-                                  editarEntrada(
-                                    movimentacao,
-                                  )
-                                }
-                                aria-label={`Editar entrada de ${nomeProduto}`}
-                                title="Editar entrada"
-                              >
-                                <Pencil
-                                  size={16}
-                                />
-                              </button>
-                            ) : (
-                              <span className="fluxo-sem-acao">
-                                Automática
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  },
-                )
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
