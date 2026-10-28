@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState,} from "react";
 import type { FormEvent } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -12,6 +7,10 @@ import "./Movimentacao.css";
 const API_URL = "http://10.3.20.30:5001";
 const CHAVE_HISTORICO = "historico-movimentacoes-estoque";
 
+/* =========================
+   Tipos
+========================= */
+  
 type TipoMovimentacao = "entrada" | "saida";
 
 type Produto = {
@@ -28,6 +27,12 @@ type ItemVenda = {
   preco: number;
   vendas_id: number;
   produtos_id: number;
+};
+
+type Pagamento = {
+  id: number;
+  vendas_id: number;
+  data_pagamento?: string;
 };
 
 type FormularioEntrada = {
@@ -58,7 +63,10 @@ type RespostaErroApi = {
 };
 
 function obterDataAtual() {
-  return new Date().toISOString().slice(0, 10);
+  const agora = new Date();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
+  return `${agora.getFullYear()}-${mes}-${dia}`;
 }
 
 const formularioInicial: FormularioEntrada = {
@@ -133,6 +141,7 @@ function formatarData(data?: string) {
   });
 }
 
+
 function obterProduto(produtoId: number, produtos: Produto[]) {
   return produtos.find((produto) => produto.id === produtoId);
 }
@@ -158,6 +167,7 @@ function obterMensagemErro(dados: unknown, status: number) {
   if (typeof dados === "string" && dados.trim()) return dados;
   return `Erro HTTP ${status}`;
 }
+
 
 function Movimentacao() {
   const [formulario, setFormulario] = useState<FormularioEntrada>({
@@ -522,7 +532,8 @@ function Movimentacao() {
           <div>
             <h1 className="medium-h1">Movimentação de estoque</h1>
             <p className="light-h3">
-              Registre entradas e acompanhe as saídas realizadas pelo atendimento.
+              Registre entradas e acompanhe as saídas realizadas pelo
+              atendimento.
             </p>
           </div>
         </div>
