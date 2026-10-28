@@ -13,10 +13,7 @@ const gruposMenu = [
     titulo: "Estoque",
     itens: ["Movimentação", "Inventário"],
   },
-  {
-    titulo: "Fluxo",
-    itens: ["Fluxo de Caixa","Funcionario"],
-  },
+
 ];
 
 type MenuLateralProps = {

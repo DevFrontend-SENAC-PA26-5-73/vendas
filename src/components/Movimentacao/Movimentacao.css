@@ -14,12 +14,12 @@
 /* Cabeçalho */
 
 .fluxo-cabecalho {
+  padding: 24px;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-
-  padding: 24px;
 
   background-color: var(--w);
   border: 1px solid var(--c);
@@ -45,11 +45,11 @@
 
   border-radius: 12px;
 
-  color: var(--b);
-  background-color: var(--primaria);
+  color: #9f2836;
+  background-color: #ffe7ea;
 
-  font-family: "Montserrat", sans-serif;
-  font-size: 24px;
+  font-family: Arial, sans-serif;
+  font-size: 25px;
   font-weight: 600;
 }
 
@@ -70,16 +70,17 @@
   flex-shrink: 0;
   padding: 11px 18px;
 
+  color: var(--b);
+  background-color: var(--w);
   border: 1px solid var(--c);
   border-radius: 8px;
 
-  color: var(--b);
-  background-color: var(--w);
-
   cursor: pointer;
+
   transition:
     border-color 0.2s ease,
-    background-color 0.2s ease;
+    background-color 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .fluxo-botao-atualizar:hover:not(:disabled) {
@@ -87,17 +88,17 @@
   background-color: var(--c);
 }
 
-/* Resumo */
+/* Cards de unidades */
 
 .fluxo-resumo {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
 }
 
 .fluxo-resumo-card {
   min-width: 0;
-  min-height: 130px;
+  min-height: 125px;
   padding: 20px;
 
   display: flex;
@@ -108,16 +109,17 @@
   background-color: var(--w);
   border: 1px solid var(--c);
   border-radius: 12px;
+
   box-sizing: border-box;
 }
 
 .fluxo-resumo-card strong {
-  display: block;
   color: var(--b);
 }
 
 .fluxo-resumo-card small {
   color: #707070;
+
   font-family: "Montserrat", sans-serif;
   font-size: 11px;
 }
@@ -131,6 +133,7 @@
 .fluxo-resumo-icone {
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
 
   display: flex;
   align-items: center;
@@ -139,42 +142,26 @@
   border-radius: 8px;
 
   font-family: Arial, sans-serif;
-  font-size: 19px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .fluxo-resumo-entrada {
-  border-top: 4px solid #2ab783;
-}
-
-.fluxo-resumo-entrada .fluxo-resumo-icone {
-  color: #177252;
-  background-color: #daf5ea;
-}
-
-.fluxo-resumo-saida {
   border-top: 4px solid #e05a67;
 }
 
-.fluxo-resumo-saida .fluxo-resumo-icone {
+.fluxo-resumo-entrada .fluxo-resumo-icone {
   color: #a62d3a;
   background-color: #ffe3e6;
 }
 
-.fluxo-resumo-saldo {
-  border-top: 4px solid var(--primaria);
+.fluxo-resumo-saida {
+  border-top: 4px solid var(--secundario);
 }
 
-.fluxo-resumo-saldo .fluxo-resumo-icone {
-  color: var(--b);
-  background-color: var(--c);
-}
-
-.fluxo-resumo-saldo-negativo {
-  border-top-color: #e05a67;
-}
-
-.fluxo-resumo-saldo-negativo strong {
-  color: #b83240;
+.fluxo-resumo-saida .fluxo-resumo-icone {
+  color: var(--w);
+  background-color: var(--secundario);
 }
 
 /* Painéis */
@@ -211,60 +198,6 @@
   gap: 24px;
 }
 
-.fluxo-tipo-seletor {
-  width: fit-content;
-  padding: 4px;
-
-  display: flex;
-  gap: 4px;
-
-  border-radius: 10px;
-  background-color: var(--c);
-}
-
-.fluxo-tipo-botao {
-  min-width: 130px;
-  padding: 10px 18px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-
-  border: none;
-  border-radius: 7px;
-
-  color: #707070;
-  background-color: transparent;
-
-  font-family: "Montserrat", sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-
-  cursor: pointer;
-  transition:
-    color 0.2s ease,
-    background-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.fluxo-tipo-botao span {
-  font-family: Arial, sans-serif;
-  font-size: 18px;
-}
-
-.fluxo-tipo-botao-entrada-ativo {
-  color: #176b50;
-  background-color: var(--w);
-  box-shadow: 0 2px 7px rgb(0 0 0 / 8%);
-}
-
-.fluxo-tipo-botao-saida-ativo {
-  color: #a32939;
-  background-color: var(--w);
-  box-shadow: 0 2px 7px rgb(0 0 0 / 8%);
-}
-
 .fluxo-campos {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -291,17 +224,17 @@
   width: 100%;
   min-width: 0;
 
+  color: var(--b);
+  background-color: #fafafa;
   border: 1px solid var(--c);
   border-radius: 8px;
   outline: none;
-
-  color: var(--b);
-  background-color: #fafafa;
 
   font-family: "Montserrat", sans-serif;
   font-size: 12px;
 
   box-sizing: border-box;
+
   transition:
     border-color 0.2s ease,
     background-color 0.2s ease,
@@ -328,6 +261,7 @@
 .fluxo-filtros select:focus {
   border-color: var(--primaria);
   background-color: var(--w);
+
   box-shadow: 0 0 0 3px rgb(198 255 0 / 14%);
 }
 
@@ -337,80 +271,39 @@
   color: #999;
 }
 
-.fluxo-campo-moeda {
-  height: 42px;
-
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-
-  border: 1px solid var(--c);
-  border-radius: 8px;
-  overflow: hidden;
-
-  background-color: #fafafa;
+.fluxo-campo-descricao {
+  grid-column: 1 / -1;
 }
 
-.fluxo-campo-moeda:focus-within {
-  border-color: var(--primaria);
-  background-color: var(--w);
-  box-shadow: 0 0 0 3px rgb(198 255 0 / 14%);
-}
+/* Informações não editáveis */
 
-.fluxo-campo-moeda > span {
-  height: 100%;
-  padding: 0 11px;
+.fluxo-informacao {
+  min-height: 42px;
+  padding: 0 12px;
 
   display: flex;
   align-items: center;
 
-  color: #707070;
-  background-color: var(--c);
+  color: #5f5f5f;
+  background-color: #f1f1f4;
+  border: 1px solid var(--c);
+  border-radius: 8px;
 
   font-family: "Montserrat", sans-serif;
   font-size: 12px;
+
+  box-sizing: border-box;
 }
 
-.fluxo-campo-moeda input {
-  height: 100%;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.fluxo-campo-moeda input:focus {
-  box-shadow: none;
-}
-
-.fluxo-campo-descricao {
-  grid-column: span 2;
-}
-
-.fluxo-total {
-  min-height: 94px;
-  padding: 16px;
-
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-
-  border: 1px dashed var(--primaria);
-  border-radius: 10px;
-  background-color: rgb(198 255 0 / 7%);
-}
-
-.fluxo-total strong {
+.fluxo-informacao-valor {
   color: var(--b);
+  background-color: #f4f4f5;
+  border-color: #d7d7da;
+
+  font-weight: 600;
 }
 
-.fluxo-total small {
-  color: #707070;
-  font-family: "Montserrat", sans-serif;
-  font-size: 11px;
-}
-
-/* Feedback */
+/* Mensagens */
 
 .fluxo-mensagem {
   padding: 12px 14px;
@@ -444,12 +337,13 @@
 
 .fluxo-botao-cancelar,
 .fluxo-botao-salvar {
-  min-width: 130px;
+  min-width: 140px;
   padding: 11px 18px;
 
   border-radius: 8px;
 
   cursor: pointer;
+
   transition:
     opacity 0.2s ease,
     transform 0.2s ease,
@@ -457,23 +351,15 @@
 }
 
 .fluxo-botao-cancelar {
-  border: 1px solid var(--c);
-
   color: var(--b);
   background-color: var(--w);
+  border: 1px solid var(--c);
 }
 
 .fluxo-botao-salvar {
-  border: 1px solid var(--primaria);
-
-  color: var(--b);
-  background-color: var(--primaria);
-}
-
-.fluxo-botao-salvar-saida {
   color: var(--w);
-  border-color: var(--secundario);
   background-color: var(--secundario);
+  border: 1px solid var(--secundario);
 }
 
 .fluxo-botao-cancelar:hover:not(:disabled),
@@ -489,7 +375,7 @@
   cursor: not-allowed;
 }
 
-/* Histórico */
+/* Filtros */
 
 .fluxo-historico-topo {
   flex-wrap: wrap;
@@ -508,10 +394,12 @@
 }
 
 .fluxo-filtros select {
-  width: 150px;
+  width: 140px;
   height: 38px;
   padding: 0 10px;
 }
+
+/* Tabela */
 
 .fluxo-tabela-container {
   width: 100%;
@@ -520,10 +408,10 @@
 
 .fluxo-tabela {
   width: 100%;
-  min-width: 900px;
+  min-width: 1050px;
 
-  border-collapse: collapse;
   color: var(--b);
+  border-collapse: collapse;
 }
 
 .fluxo-tabela th,
@@ -561,16 +449,6 @@
   background-color: rgb(0 0 0 / 2%);
 }
 
-.fluxo-tabela td strong,
-.fluxo-tabela td small {
-  display: block;
-}
-
-.fluxo-tabela td small {
-  margin-top: 4px;
-  color: #707070;
-}
-
 .fluxo-status {
   width: fit-content;
   padding: 6px 10px;
@@ -585,22 +463,45 @@
 }
 
 .fluxo-status-entrada {
-  color: #176b50;
-  background-color: #dff6ec;
-}
-
-.fluxo-status-saida {
   color: #a32939;
   background-color: #ffe3e7;
 }
 
-.fluxo-valor-entrada {
-  color: #187655;
-  font-weight: 600;
+.fluxo-status-saida {
+  color: var(--w);
+  background-color: var(--secundario);
 }
 
-.fluxo-valor-saida {
-  color: #b43242;
+.fluxo-produto {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fluxo-produto-avatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--b);
+  background-color: var(--w);
+  border: 1px solid var(--b);
+  border-radius: 50%;
+
+  font-size: 12px;
+}
+
+.fluxo-produto strong {
+  color: var(--b);
+  font-weight: 500;
+}
+
+.fluxo-valor-total {
+  color: var(--b);
   font-weight: 600;
 }
 
@@ -609,6 +510,25 @@
 
   color: #707070;
   text-align: center !important;
+}
+
+/* Scroll da tabela */
+
+.fluxo-tabela-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.fluxo-tabela-container::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.fluxo-tabela-container::-webkit-scrollbar-thumb {
+  background-color: #c9c9cf;
+  border-radius: 10px;
+}
+
+.fluxo-tabela-container::-webkit-scrollbar-thumb:hover {
+  background-color: #ababaf;
 }
 
 /* Responsividade */
@@ -622,7 +542,7 @@
   }
 
   .fluxo-campo-descricao {
-    grid-column: auto;
+    grid-column: 1 / -1;
   }
 }
 
@@ -646,8 +566,17 @@
     flex-direction: column;
   }
 
+  .fluxo-cabecalho-texto {
+    align-items: flex-start;
+  }
+
   .fluxo-botao-atualizar {
     width: 100%;
+  }
+
+  .fluxo-painel-cabecalho,
+  .fluxo-historico-topo {
+    padding: 18px;
   }
 
   .fluxo-formulario {
@@ -660,15 +589,6 @@
 
   .fluxo-campo-descricao {
     grid-column: auto;
-  }
-
-  .fluxo-tipo-seletor {
-    width: 100%;
-  }
-
-  .fluxo-tipo-botao {
-    min-width: 0;
-    flex: 1;
   }
 
   .fluxo-acoes {
@@ -686,7 +606,7 @@
   }
 
   .fluxo-filtros {
-    align-items: stretch;
+    width: 100%;
     flex-direction: column;
   }
 
@@ -694,4 +614,230 @@
   .fluxo-filtros select {
     width: 100%;
   }
+}
+
+/* ========================================
+   CORES PADRÃO DO ERP
+   Cole este bloco no final do arquivo
+======================================== */
+
+/* Ícone principal */
+
+.fluxo-cabecalho-icone {
+  color: var(--b);
+  background-color: var(--primaria);
+}
+
+/* Cards de entrada e saída */
+
+.fluxo-resumo-entrada,
+.fluxo-resumo-saida {
+  border-top: 4px solid var(--primaria);
+}
+
+.fluxo-resumo-entrada .fluxo-resumo-icone,
+.fluxo-resumo-saida .fluxo-resumo-icone {
+  color: var(--b);
+  background-color: var(--c);
+}
+
+/* Informações automáticas */
+
+.fluxo-informacao {
+  color: var(--b);
+  background-color: var(--c);
+  border-color: var(--c);
+}
+
+.fluxo-informacao-valor {
+  color: var(--b);
+  background-color: var(--c);
+  border-color: var(--primaria);
+
+  font-weight: 600;
+}
+
+/* Botões */
+
+.fluxo-botao-salvar {
+  color: var(--b);
+  background-color: var(--primaria);
+  border-color: var(--primaria);
+}
+
+.fluxo-botao-salvar:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
+.fluxo-botao-cancelar {
+  color: var(--b);
+  background-color: var(--w);
+  border-color: var(--c);
+}
+
+.fluxo-botao-cancelar:hover:not(:disabled) {
+  background-color: var(--c);
+}
+
+/* Status da tabela */
+
+.fluxo-status-entrada,
+.fluxo-status-saida {
+  color: var(--b);
+  background-color: var(--c);
+  border: 1px solid var(--c);
+}
+
+/* Valor total da tabela */
+
+.fluxo-valor-total {
+  color: var(--b);
+  font-weight: 600;
+}
+
+/* Campos em foco */
+
+.fluxo-campo input:focus,
+.fluxo-campo select:focus,
+.fluxo-campo textarea:focus,
+.fluxo-filtros input:focus,
+.fluxo-filtros select:focus {
+  border-color: var(--primaria);
+  background-color: var(--w);
+  box-shadow: 0 0 0 3px rgb(198 255 0 / 14%);
+}
+
+/* Botão atualizar */
+
+.fluxo-botao-atualizar:hover:not(:disabled) {
+  color: var(--b);
+  background-color: var(--c);
+  border-color: var(--primaria);
+}
+
+/* Tabela */
+
+.fluxo-tabela thead {
+  color: var(--b);
+  background-color: var(--primaria);
+}
+
+.fluxo-tabela tbody tr:hover {
+  background-color: var(--c);
+}
+
+/* Avatar do produto */
+
+.fluxo-produto-avatar {
+  color: var(--b);
+  background-color: var(--w);
+  border-color: var(--b);
+}
+
+/* Mensagem de sucesso usando a paleta principal */
+
+.fluxo-mensagem-sucesso {
+  color: var(--b);
+  background-color: rgb(198 255 0 / 12%);
+  border-color: var(--primaria);
+}
+
+/* ========================================
+   EDIÇÃO PELO HISTÓRICO
+======================================== */
+
+.fluxo-status-edicao {
+  flex-shrink: 0;
+  padding: 8px 14px;
+
+  color: var(--b);
+  background-color: var(--primaria);
+
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.fluxo-tabela {
+  min-width: 1160px;
+}
+
+.fluxo-coluna-acoes {
+  width: 95px;
+  text-align: right !important;
+}
+
+.fluxo-acoes-linha {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.fluxo-acao {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--b);
+  background-color: transparent;
+
+  border: none;
+  border-radius: 6px;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.fluxo-acao:hover {
+  transform: translateY(-1px);
+}
+
+.fluxo-editar:hover {
+  background-color: var(--primaria);
+}
+
+.fluxo-sem-acao {
+  color: #888890;
+
+  font-family: "Montserrat", sans-serif;
+  font-size: 10px;
+}
+
+.fluxo-linha-em-edicao {
+  background-color: rgb(198 255 0 / 10%) !important;
+  box-shadow: inset 4px 0 0 var(--primaria);
+}
+
+.fluxo-campo select:disabled {
+  color: var(--b);
+  background-color: var(--c);
+
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+@media (max-width: 650px) {
+  .fluxo-status-edicao {
+    width: fit-content;
+  }
+}
+
+.produto-campo input:read-only {
+  color: #66666f;
+  background-color: #ededf0;
+  cursor: not-allowed;
+}
+
+.produto-codigo-ajuda {
+  color: #777780;
+  font-family: "Montserrat", sans-serif;
+  font-size: 10px;
+  line-height: 1.4;
 }

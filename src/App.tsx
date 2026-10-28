@@ -8,7 +8,7 @@ import MenuLateral from "./components/MenuLateral/MenuLateral";
 import Dashboard from "./components/Dashboard/Dashboard";
 import Atendimento from "./components/Atendimento/Atendimento";
 import Clientes from "./components/Clientes/Clientes";
-import FluxoCaixa from "./components/Fluxo de caixa/FluxoCaixa";
+import Movimentacao from "./components/Movimentacao/Movimentacao";
 import Produtos from "./components/Produtos/Produto";
 
 function App() {
@@ -41,32 +41,13 @@ function App() {
 
       case "Movimentação":
         return (
-          <section className="pagina-em-construcao">
-            <h1 className="medium-h1">
-              Movimentação
-            </h1>
-
-            <p className="light-h3">
-              Esta tela ainda não foi criada.
-            </p>
-          </section>
+          <Movimentacao/>
         );
 
       case "Produtos":
         return (
           <Produtos/>
         );
-
-      case "Fluxo de Caixa":
-        return (
-          <FluxoCaixa/>
-        );
-
-        case "Cargo":
-      return <Cargo />;
-
-      case "Funcionario":
-     return <Funcionario />;
 
       default:
         return <Dashboard />;
