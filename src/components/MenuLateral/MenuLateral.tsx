@@ -11,7 +11,7 @@ const gruposMenu = [
   },
   {
     titulo: "Estoque",
-    itens: ["Movimentação", "Inventário"],
+    itens: ["Movimentação", "Inventario"],
   },
 
 ];
