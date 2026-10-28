@@ -9,7 +9,8 @@ import Dashboard from "./components/Dashboard/Dashboard";
 import Atendimento from "./components/Atendimento/Atendimento";
 import Clientes from "./components/Clientes/Clientes";
 import Movimentacao from "./components/Movimentacao/Movimentacao";
-import Produtos from "./components/Produtos/Produto";
+import Produtos from "./components/Produtos/Produtos";
+import Inventario from "./components/Inventario/Inventario";
 
 function App() {
   const [paginaAtiva, setPaginaAtiva] =
@@ -49,8 +50,13 @@ function App() {
           <Produtos/>
         );
 
+      case "Inventario":
+        return (
+          <Inventario/>
+        )
+
       default:
-        return <Dashboard />;
+        return <> </>;
     }
   }
 
