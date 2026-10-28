@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState,} from "react";
 import type { FormEvent } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
+
 import "./Movimentacao.css";
 
-// Mesma API usada pelo Atendimento (antes estava apontando para um IP da rede local)
-const API_URL = "https://vendas.gabrielpimentel.com.br";
-
+const API_URL = "http://10.3.20.30:5001";
 const CHAVE_HISTORICO = "historico-movimentacoes-estoque";
 
 /* =========================
    Tipos
 ========================= */
-
+  
 type TipoMovimentacao = "entrada" | "saida";
 
 type Produto = {
@@ -61,13 +60,7 @@ type Mensagem = {
 
 type RespostaErroApi = {
   message?: string | string[];
-  error?: string;
-  statusCode?: number;
 };
-
-/* =========================
-   Estado inicial
-========================= */
 
 function obterDataAtual() {
   const agora = new Date();
@@ -83,28 +76,25 @@ const formularioInicial: FormularioEntrada = {
   data_movimentacao: obterDataAtual(),
 };
 
-/* =========================
-   LocalStorage
-========================= */
-
 function carregarHistoricoLocal(): MovimentacaoVisual[] {
   try {
-    const historicoSalvo = localStorage.getItem(CHAVE_HISTORICO);
-    if (!historicoSalvo) return [];
+    const valor = localStorage.getItem(CHAVE_HISTORICO);
+    if (!valor) return [];
 
-    const dados: unknown = JSON.parse(historicoSalvo);
+    const dados: unknown = JSON.parse(valor);
     if (!Array.isArray(dados)) return [];
 
-    return dados.filter((item) => {
+    return dados.filter((item): item is MovimentacaoVisual => {
       if (!item || typeof item !== "object") return false;
-      const m = item as Partial<MovimentacaoVisual>;
+      const entrada = item as Partial<MovimentacaoVisual>;
+
       return (
-        typeof m.id === "string" &&
-        m.tipo === "entrada" &&
-        typeof m.produto_id === "number" &&
-        typeof m.quantidade === "number"
+        typeof entrada.id === "string" &&
+        entrada.tipo === "entrada" &&
+        typeof entrada.produto_id === "number" &&
+        typeof entrada.quantidade === "number"
       );
-    }) as MovimentacaoVisual[];
+    });
   } catch (erro) {
     console.error("Erro ao carregar histórico local:", erro);
     return [];
@@ -118,10 +108,6 @@ function salvarHistoricoLocal(entradas: MovimentacaoVisual[]) {
     console.error("Erro ao salvar histórico local:", erro);
   }
 }
-
-/* =========================
-   Formatação
-========================= */
 
 function formatarNumero(valor: number) {
   return Number(valor || 0).toLocaleString("pt-BR", {
@@ -142,8 +128,8 @@ function formatarMoeda(valor: number) {
 function formatarData(data?: string) {
   if (!data) return "Não informada";
 
-  const dataNormalizada = data.includes("T") ? data : `${data}T00:00:00`;
-  const dataConvertida = new Date(dataNormalizada);
+  const valor = data.includes("T") ? data : `${data}T00:00:00`;
+  const dataConvertida = new Date(valor);
 
   if (Number.isNaN(dataConvertida.getTime())) return "Data inválida";
 
@@ -155,9 +141,6 @@ function formatarData(data?: string) {
   });
 }
 
-/* =========================
-   Funções auxiliares
-========================= */
 
 function obterProduto(produtoId: number, produtos: Produto[]) {
   return produtos.find((produto) => produto.id === produtoId);
@@ -176,28 +159,15 @@ async function lerResposta(resposta: Response): Promise<unknown> {
 
 function obterMensagemErro(dados: unknown, status: number) {
   if (dados && typeof dados === "object" && "message" in dados) {
-    const erro = dados as RespostaErroApi;
-    if (Array.isArray(erro.message)) return erro.message.join(", ");
-    if (typeof erro.message === "string") return erro.message;
+    const mensagem = (dados as RespostaErroApi).message;
+    if (Array.isArray(mensagem)) return mensagem.join(", ");
+    if (typeof mensagem === "string") return mensagem;
   }
 
-  if (typeof dados === "string" && dados.trim().length > 0) return dados;
-
+  if (typeof dados === "string" && dados.trim()) return dados;
   return `Erro HTTP ${status}`;
 }
 
-async function lerLista<T>(
-  resultado: PromiseSettledResult<Response>,
-): Promise<T[] | null> {
-  if (resultado.status !== "fulfilled" || !resultado.value.ok) return null;
-
-  const dados: unknown = await resultado.value.json();
-  return Array.isArray(dados) ? (dados as T[]) : [];
-}
-
-/* =========================
-   Componente
-========================= */
 
 function Movimentacao() {
   const [formulario, setFormulario] = useState<FormularioEntrada>({
@@ -206,41 +176,28 @@ function Movimentacao() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [estoque, setEstoque] = useState<Produto[]>([]);
   const [itensVenda, setItensVenda] = useState<ItemVenda[]>([]);
-  const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
-  const [entradasSalvas, setEntradasSalvas] = useState<MovimentacaoVisual[]>(
-    carregarHistoricoLocal,
-  );
-  const [entradaEmEdicao, setEntradaEmEdicao] = useState<string | null>(null);
+  const [entradasSalvas, setEntradasSalvas] =
+    useState<MovimentacaoVisual[]>(carregarHistoricoLocal);
+  const [entradaEmEdicao, setEntradaEmEdicao] =
+    useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<Mensagem | null>(null);
   const [busca, setBusca] = useState("");
-  const [filtroTipo, setFiltroTipo] = useState<"todos" | TipoMovimentacao>(
-    "todos",
-  );
-
-  /* =========================
-     Produto selecionado
-  ========================= */
+  const [filtroTipo, setFiltroTipo] =
+    useState<"todos" | TipoMovimentacao>("todos");
 
   const produtoSelecionado = useMemo(() => {
-    const produtoId = Number(formulario.produto_id);
-    if (!produtoId) return undefined;
-    return produtos.find((produto) => produto.id === produtoId);
+    const id = Number(formulario.produto_id);
+    return id ? produtos.find((produto) => produto.id === id) : undefined;
   }, [formulario.produto_id, produtos]);
 
   const precoUnitario = Number(produtoSelecionado?.preco ?? 0);
   const categoriaProduto = produtoSelecionado?.tipo ?? "Selecione um produto";
   const quantidadeInformada = Number(formulario.quantidade || 0);
-
-  const valorTotalFormulario = useMemo(
-    () => Number((quantidadeInformada * precoUnitario).toFixed(2)),
-    [quantidadeInformada, precoUnitario],
+  const valorTotalFormulario = Number(
+    (quantidadeInformada * precoUnitario).toFixed(2),
   );
-
-  /* =========================
-     Resumos
-  ========================= */
 
   const totalUnidadesEstoque = useMemo(
     () =>
@@ -260,39 +217,19 @@ function Movimentacao() {
     [itensVenda],
   );
 
-  /* =========================
-     Saídas do Atendimento
-     (cada item vendido em /itemvenda vira uma saída)
-  ========================= */
-
-  const dataPorVenda = useMemo(() => {
-    const mapa = new Map<number, string>();
-    pagamentos.forEach((pagamento) => {
-      if (pagamento.data_pagamento) {
-        mapa.set(Number(pagamento.vendas_id), pagamento.data_pagamento);
-      }
-    });
-    return mapa;
-  }, [pagamentos]);
-
-  const saidasAtendimento = useMemo<MovimentacaoVisual[]>(() => {
-    return [...itensVenda]
-      .sort((a, b) => b.id - a.id) // mais recentes primeiro
-      .map((item) => ({
+  const saidasAtendimento = useMemo<MovimentacaoVisual[]>(
+    () =>
+      itensVenda.map((item) => ({
         id: `saida-${item.id}`,
-        tipo: "saida" as const,
+        tipo: "saida",
         produto_id: item.produtos_id,
         quantidade: Number(item.quantidade || 0),
         preco_unitario: Number(Number(item.preco || 0).toFixed(2)),
         descricao: `Saída gerada pela venda #${item.vendas_id}`,
-        data_movimentacao: dataPorVenda.get(Number(item.vendas_id)),
         venda_id: item.vendas_id,
-      }));
-  }, [itensVenda, dataPorVenda]);
-
-  /* =========================
-     Histórico completo
-  ========================= */
+      })),
+    [itensVenda],
+  );
 
   const historicoCompleto = useMemo(
     () => [...entradasSalvas, ...saidasAtendimento],
@@ -303,71 +240,53 @@ function Movimentacao() {
     const termo = busca.trim().toLowerCase();
 
     return historicoCompleto.filter((movimentacao) => {
-      const correspondeTipo =
-        filtroTipo === "todos" || movimentacao.tipo === filtroTipo;
-
       const produto = obterProduto(movimentacao.produto_id, produtos);
-
-      const textoPesquisa = [produto?.nome, produto?.tipo, movimentacao.descricao]
+      const texto = [produto?.nome, produto?.tipo, movimentacao.descricao]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
 
-      const correspondeBusca =
-        termo.length === 0 || textoPesquisa.includes(termo);
-
-      return correspondeTipo && correspondeBusca;
+      return (
+        (filtroTipo === "todos" || movimentacao.tipo === filtroTipo) &&
+        (!termo || texto.includes(termo))
+      );
     });
   }, [busca, filtroTipo, historicoCompleto, produtos]);
 
-  /* =========================
-     Carregamento da API
-  ========================= */
-
-  const carregarDados = useCallback(async (limparMensagem = true) => {
+  const carregarDados = useCallback(async () => {
     try {
       setCarregando(true);
-      if (limparMensagem) setMensagem(null);
+      setMensagem(null);
 
-      const [
-        resultadoProdutos,
-        resultadoEstoque,
-        resultadoItens,
-        resultadoPagamentos,
-      ] = await Promise.allSettled([
-        fetch(`${API_URL}/produtos`),
-        fetch(`${API_URL}/estoque`),
-        fetch(`${API_URL}/itemvenda`),
-        fetch(`${API_URL}/pagamentos`),
-      ]);
+      const [respostaProdutos, respostaEstoque, respostaItens] =
+        await Promise.all([
+          fetch(`${API_URL}/produtos`),
+          fetch(`${API_URL}/estoque`),
+          fetch(`${API_URL}/itemvenda`),
+        ]);
 
-      const listaProdutos = await lerLista<Produto>(resultadoProdutos);
-      if (listaProdutos === null) {
+      if (!respostaProdutos.ok) {
         throw new Error("Não foi possível carregar os produtos.");
       }
-      setProdutos(listaProdutos);
 
-      // Se a rota /estoque não existir, usa a quantidade dos próprios produtos
-      const listaEstoque = await lerLista<Produto>(resultadoEstoque);
-      setEstoque(listaEstoque ?? listaProdutos);
+      const dadosProdutos: unknown = await respostaProdutos.json();
+      setProdutos(Array.isArray(dadosProdutos) ? (dadosProdutos as Produto[]) : []);
 
-      const listaItens = await lerLista<ItemVenda>(resultadoItens);
-      if (listaItens === null) {
-        setItensVenda([]);
-        setMensagem({
-          tipo: "erro",
-          texto: "Não foi possível carregar as saídas (GET /itemvenda).",
-        });
+      if (respostaEstoque.ok) {
+        const dadosEstoque: unknown = await respostaEstoque.json();
+        setEstoque(Array.isArray(dadosEstoque) ? (dadosEstoque as Produto[]) : []);
       } else {
-        setItensVenda(listaItens);
+        setEstoque([]);
       }
 
-      // As datas das saídas vêm dos pagamentos; se falhar, só fica sem data
-      const listaPagamentos = await lerLista<Pagamento>(resultadoPagamentos);
-      setPagamentos(listaPagamentos ?? []);
+      if (respostaItens.ok) {
+        const dadosItens: unknown = await respostaItens.json();
+        setItensVenda(Array.isArray(dadosItens) ? (dadosItens as ItemVenda[]) : []);
+      } else {
+        setItensVenda([]);
+      }
     } catch (erro) {
       console.error("Erro ao carregar dados:", erro);
-
       setMensagem({
         tipo: "erro",
         texto:
@@ -384,21 +303,18 @@ function Movimentacao() {
     void carregarDados();
   }, [carregarDados]);
 
-  // Sempre que as entradas forem alteradas, o histórico é salvo no navegador
   useEffect(() => {
     salvarHistoricoLocal(entradasSalvas);
   }, [entradasSalvas]);
 
-  /* =========================
-     Formulário
-  ========================= */
-
-  function alterarCampo(campo: keyof FormularioEntrada, novoValor: string) {
-    setFormulario((dadosAtuais) => ({
-      ...dadosAtuais,
+  function alterarCampo(
+    campo: keyof FormularioEntrada,
+    novoValor: string,
+  ) {
+    setFormulario((atual) => ({
+      ...atual,
       [campo]: novoValor,
     }));
-
     setMensagem(null);
   }
 
@@ -407,7 +323,6 @@ function Movimentacao() {
       ...formularioInicial,
       data_movimentacao: obterDataAtual(),
     });
-
     setEntradaEmEdicao(null);
     setMensagem(null);
   }
@@ -419,18 +334,46 @@ function Movimentacao() {
       produto_id: String(movimentacao.produto_id),
       quantidade: String(movimentacao.quantidade),
       descricao: movimentacao.descricao,
-      data_movimentacao: movimentacao.data_movimentacao ?? obterDataAtual(),
+      data_movimentacao:
+        movimentacao.data_movimentacao ?? obterDataAtual(),
     });
-
     setEntradaEmEdicao(movimentacao.id);
     setMensagem(null);
-
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  /* =========================
-     POST /estoque
-  ========================= */
+  function excluirEntradaDoHistorico(movimentacao: MovimentacaoVisual) {
+    if (movimentacao.tipo !== "entrada") return;
+
+    const produto = obterProduto(movimentacao.produto_id, produtos);
+    const nome = produto?.nome ?? `Produto #${movimentacao.produto_id}`;
+
+    const confirmou = window.confirm(
+      [
+        `Excluir a entrada de ${nome} do histórico?`,
+        "",
+        `Quantidade registrada: ${movimentacao.quantidade}`,
+        "",
+        "Esta ação remove somente o registro salvo neste navegador.",
+        "A quantidade do estoque na API não será alterada.",
+      ].join("\n"),
+    );
+
+    if (!confirmou) return;
+
+    setEntradasSalvas((atuais) =>
+      atuais.filter((entrada) => entrada.id !== movimentacao.id),
+    );
+
+    if (entradaEmEdicao === movimentacao.id) {
+      limparFormulario();
+    }
+
+    setMensagem({
+      tipo: "sucesso",
+      texto: "Entrada removida do histórico deste navegador.",
+    });
+  }
 
   async function cadastrarEntrada(produtoId: number, quantidade: number) {
     const resposta = await fetch(`${API_URL}/estoque`, {
@@ -442,40 +385,27 @@ function Movimentacao() {
       body: JSON.stringify({ produto_id: produtoId, quantidade }),
     });
 
-    const dadosResposta = await lerResposta(resposta);
-
+    const dados = await lerResposta(resposta);
     if (!resposta.ok) {
-      throw new Error(obterMensagemErro(dadosResposta, resposta.status));
+      throw new Error(obterMensagemErro(dados, resposta.status));
     }
   }
 
-  /* =========================
-     PATCH /estoque/{id}
-  ========================= */
-
-  async function atualizarEstoque(produtoId: number, novaQuantidade: number) {
+  async function atualizarEstoque(produtoId: number, quantidade: number) {
     const resposta = await fetch(`${API_URL}/estoque/${produtoId}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({
-        produto_id: produtoId,
-        quantidade: novaQuantidade,
-      }),
+      body: JSON.stringify({ produto_id: produtoId, quantidade }),
     });
 
-    const dadosResposta = await lerResposta(resposta);
-
+    const dados = await lerResposta(resposta);
     if (!resposta.ok) {
-      throw new Error(obterMensagemErro(dadosResposta, resposta.status));
+      throw new Error(obterMensagemErro(dados, resposta.status));
     }
   }
-
-  /* =========================
-     Salvar
-  ========================= */
 
   async function salvarEntrada(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -508,26 +438,20 @@ function Movimentacao() {
       setSalvando(true);
       setMensagem(null);
 
-      let textoSucesso = "Entrada registrada com sucesso.";
-
-      if (entradaEmEdicao !== null) {
-        // Edição de uma entrada já salva no histórico local
-        const entradaAnterior = entradasSalvas.find(
+      if (entradaEmEdicao) {
+        const anterior = entradasSalvas.find(
           (entrada) => entrada.id === entradaEmEdicao,
         );
 
-        if (!entradaAnterior) {
+        if (!anterior) {
           throw new Error("A entrada selecionada não foi encontrada.");
         }
 
-        const diferenca = quantidade - entradaAnterior.quantidade;
-
-        const produtoNoEstoque = estoque.find(
-          (produto) => produto.id === produtoId,
+        const estoqueAtual = Number(
+          estoque.find((produto) => produto.id === produtoId)?.quantidade ?? 0,
         );
-
-        const quantidadeAtual = Number(produtoNoEstoque?.quantidade ?? 0);
-        const novaQuantidadeEstoque = quantidadeAtual + diferenca;
+        const novaQuantidadeEstoque =
+          estoqueAtual + (quantidade - anterior.quantidade);
 
         if (novaQuantidadeEstoque < 0) {
           throw new Error("A alteração deixaria o estoque negativo.");
@@ -535,8 +459,8 @@ function Movimentacao() {
 
         await atualizarEstoque(produtoId, novaQuantidadeEstoque);
 
-        setEntradasSalvas((entradasAtuais) =>
-          entradasAtuais.map((entrada) =>
+        setEntradasSalvas((atuais) =>
+          atuais.map((entrada) =>
             entrada.id === entradaEmEdicao
               ? {
                   ...entrada,
@@ -551,9 +475,11 @@ function Movimentacao() {
           ),
         );
 
-        textoSucesso = "Entrada atualizada com sucesso.";
+        setMensagem({
+          tipo: "sucesso",
+          texto: "Entrada atualizada com sucesso.",
+        });
       } else {
-        // Nova entrada
         await cadastrarEntrada(produtoId, quantidade);
 
         const novaEntrada: MovimentacaoVisual = {
@@ -563,27 +489,29 @@ function Movimentacao() {
           quantidade,
           preco_unitario: Number(precoUnitario.toFixed(2)),
           descricao:
-            formulario.descricao.trim() || "Entrada de produto no estoque",
+            formulario.descricao.trim() ||
+            "Entrada de produto no estoque",
           data_movimentacao: formulario.data_movimentacao,
         };
 
-        setEntradasSalvas((entradasAtuais) => [novaEntrada, ...entradasAtuais]);
+        setEntradasSalvas((atuais) => [novaEntrada, ...atuais]);
+        setMensagem({
+          tipo: "sucesso",
+          texto: "Entrada registrada com sucesso.",
+        });
       }
 
-      // Recarrega os dados oficiais da API sem apagar a mensagem de sucesso
-      await carregarDados(false);
-
-      setMensagem({ tipo: "sucesso", texto: textoSucesso });
+      await carregarDados();
+      window.dispatchEvent(new CustomEvent("estoque-atualizado"));
+      window.dispatchEvent(new CustomEvent("produtos-atualizados"));
 
       setFormulario({
         ...formularioInicial,
         data_movimentacao: obterDataAtual(),
       });
-
       setEntradaEmEdicao(null);
     } catch (erro) {
       console.error("Erro ao salvar entrada:", erro);
-
       setMensagem({
         tipo: "erro",
         texto:
@@ -596,19 +524,13 @@ function Movimentacao() {
     }
   }
 
-  /* =========================
-     Interface
-  ========================= */
-
   return (
     <section className="fluxo-caixa">
       <header className="fluxo-cabecalho">
         <div className="fluxo-cabecalho-texto">
           <span className="fluxo-cabecalho-icone">↕</span>
-
           <div>
             <h1 className="medium-h1">Movimentação de estoque</h1>
-
             <p className="light-h3">
               Registre entradas e acompanhe as saídas realizadas pelo
               atendimento.
@@ -632,11 +554,9 @@ function Movimentacao() {
             <span className="fluxo-resumo-icone">+</span>
             <span className="light-h3">Unidades em estoque</span>
           </div>
-
           <strong className="bold-h2">
             {formatarNumero(totalUnidadesEstoque)}
           </strong>
-
           <small>Soma atual das unidades disponíveis</small>
         </article>
 
@@ -645,47 +565,27 @@ function Movimentacao() {
             <span className="fluxo-resumo-icone">−</span>
             <span className="light-h3">Unidades vendidas</span>
           </div>
-
           <strong className="bold-h2">
             {formatarNumero(totalUnidadesVendidas)}
           </strong>
-
           <small>Saídas registradas pelo atendimento</small>
         </article>
       </div>
 
-      {/* Mensagem fora do formulário para aparecer também ao carregar */}
-      {mensagem && !carregando && (
-        <div
-          className={`fluxo-mensagem ${
-            mensagem.tipo === "sucesso"
-              ? "fluxo-mensagem-sucesso"
-              : "fluxo-mensagem-erro"
-          }`}
-          role="alert"
-        >
-          {mensagem.texto}
-        </div>
-      )}
-
-      {/* Formulário */}
       <article className="fluxo-painel">
         <div className="fluxo-painel-cabecalho">
           <div>
             <h2 className="medium-h2">
-              {entradaEmEdicao !== null
-                ? "Editar entrada"
-                : "Nova entrada de produto"}
+              {entradaEmEdicao ? "Editar entrada" : "Nova entrada de produto"}
             </h2>
-
             <p className="light-h3">
-              {entradaEmEdicao !== null
+              {entradaEmEdicao
                 ? "Altere os dados da entrada selecionada."
                 : "Selecione um produto e informe a quantidade recebida."}
             </p>
           </div>
 
-          {entradaEmEdicao !== null && (
+          {entradaEmEdicao && (
             <span className="fluxo-status-edicao medium-h3">Em edição</span>
           )}
         </div>
@@ -694,21 +594,17 @@ function Movimentacao() {
           <div className="fluxo-campos">
             <label className="fluxo-campo">
               <span className="medium-h3">Produto</span>
-
               <select
                 value={formulario.produto_id}
                 onChange={(evento) =>
                   alterarCampo("produto_id", evento.target.value)
                 }
-                disabled={carregando || entradaEmEdicao !== null}
+                disabled={carregando || Boolean(entradaEmEdicao)}
                 required
               >
                 <option value="">
-                  {carregando
-                    ? "Carregando produtos..."
-                    : "Selecione um produto"}
+                  {carregando ? "Carregando produtos..." : "Selecione um produto"}
                 </option>
-
                 {produtos.map((produto) => (
                   <option key={produto.id} value={String(produto.id)}>
                     {produto.nome}
@@ -719,7 +615,6 @@ function Movimentacao() {
 
             <label className="fluxo-campo">
               <span className="medium-h3">Quantidade recebida</span>
-
               <input
                 type="number"
                 min="1"
@@ -728,14 +623,12 @@ function Movimentacao() {
                 onChange={(evento) =>
                   alterarCampo("quantidade", evento.target.value)
                 }
-                placeholder="Ex.: 10"
                 required
               />
             </label>
 
             <label className="fluxo-campo">
               <span className="medium-h3">Data da entrada</span>
-
               <input
                 type="date"
                 value={formulario.data_movimentacao}
@@ -753,7 +646,6 @@ function Movimentacao() {
 
             <div className="fluxo-campo">
               <span className="medium-h3">Preço unitário</span>
-
               <div className="fluxo-informacao">
                 {produtoSelecionado
                   ? formatarMoeda(precoUnitario)
@@ -763,7 +655,6 @@ function Movimentacao() {
 
             <div className="fluxo-campo">
               <span className="medium-h3">Valor total</span>
-
               <div className="fluxo-informacao fluxo-informacao-valor">
                 {formatarMoeda(valorTotalFormulario)}
               </div>
@@ -771,7 +662,6 @@ function Movimentacao() {
 
             <label className="fluxo-campo fluxo-campo-descricao">
               <span className="medium-h3">Descrição</span>
-
               <textarea
                 rows={3}
                 value={formulario.descricao}
@@ -783,6 +673,19 @@ function Movimentacao() {
             </label>
           </div>
 
+          {mensagem && (
+            <div
+              className={`fluxo-mensagem ${
+                mensagem.tipo === "sucesso"
+                  ? "fluxo-mensagem-sucesso"
+                  : "fluxo-mensagem-erro"
+              }`}
+              role="alert"
+            >
+              {mensagem.texto}
+            </div>
+          )}
+
           <div className="fluxo-acoes">
             <button
               type="button"
@@ -790,7 +693,7 @@ function Movimentacao() {
               onClick={limparFormulario}
               disabled={salvando}
             >
-              {entradaEmEdicao !== null ? "Cancelar edição" : "Limpar"}
+              {entradaEmEdicao ? "Cancelar edição" : "Limpar"}
             </button>
 
             <button
@@ -800,7 +703,7 @@ function Movimentacao() {
             >
               {salvando
                 ? "Salvando..."
-                : entradaEmEdicao !== null
+                : entradaEmEdicao
                   ? "Atualizar entrada"
                   : "Registrar entrada"}
             </button>
@@ -808,15 +711,12 @@ function Movimentacao() {
         </form>
       </article>
 
-      {/* Histórico */}
       <article className="fluxo-painel">
         <div className="fluxo-historico-topo">
           <div>
             <h2 className="medium-h2">Histórico de movimentações</h2>
-
             <p className="light-h3">
-              As entradas ficam salvas neste navegador. As saídas vêm das
-              vendas do atendimento.
+              Entradas locais podem ser editadas ou removidas do histórico.
             </p>
           </div>
 
@@ -826,15 +726,12 @@ function Movimentacao() {
               value={busca}
               onChange={(evento) => setBusca(evento.target.value)}
               placeholder="Buscar produto"
-              aria-label="Buscar produto"
             />
-
             <select
               value={filtroTipo}
               onChange={(evento) =>
                 setFiltroTipo(evento.target.value as "todos" | TipoMovimentacao)
               }
-              aria-label="Filtrar movimentações"
             >
               <option value="todos">Todas</option>
               <option value="entrada">Entradas</option>
@@ -874,72 +771,63 @@ function Movimentacao() {
                 </tr>
               ) : (
                 historicoFiltrado.map((movimentacao) => {
-                  const produto = obterProduto(
-                    movimentacao.produto_id,
-                    produtos,
-                  );
-
-                  const nomeProduto =
-                    produto?.nome ?? `Produto #${movimentacao.produto_id}`;
-
+                  const produto = obterProduto(movimentacao.produto_id, produtos);
+                  const nome = produto?.nome ?? `Produto #${movimentacao.produto_id}`;
                   const categoria = produto?.tipo ?? "Não informada";
-
-                  const valorTotal = Number(
-                    (
-                      movimentacao.quantidade * movimentacao.preco_unitario
-                    ).toFixed(2),
-                  );
-
-                  const estaEmEdicao = entradaEmEdicao === movimentacao.id;
+                  const total = movimentacao.quantidade * movimentacao.preco_unitario;
 
                   return (
                     <tr
                       key={movimentacao.id}
-                      className={estaEmEdicao ? "fluxo-linha-em-edicao" : ""}
+                      className={
+                        entradaEmEdicao === movimentacao.id
+                          ? "fluxo-linha-em-edicao"
+                          : ""
+                      }
                     >
                       <td>
-                        <span
-                          className={`fluxo-status fluxo-status-${movimentacao.tipo}`}
-                        >
-                          {movimentacao.tipo === "entrada"
-                            ? "Entrada"
-                            : "Saída"}
+                        <span className={`fluxo-status fluxo-status-${movimentacao.tipo}`}>
+                          {movimentacao.tipo === "entrada" ? "Entrada" : "Saída"}
                         </span>
                       </td>
-
                       <td>
                         <div className="fluxo-produto">
                           <span className="fluxo-produto-avatar">
-                            {nomeProduto.charAt(0).toUpperCase()}
+                            {nome.charAt(0).toUpperCase()}
                           </span>
-
-                          <strong>{nomeProduto}</strong>
+                          <strong>{nome}</strong>
                         </div>
                       </td>
-
                       <td>{categoria}</td>
                       <td>{movimentacao.descricao}</td>
                       <td>{formatarData(movimentacao.data_movimentacao)}</td>
-
                       <td>{formatarNumero(movimentacao.quantidade)} un.</td>
                       <td>{formatarMoeda(movimentacao.preco_unitario)}</td>
-
-                      <td className="fluxo-valor-total">
-                        {formatarMoeda(valorTotal)}
-                      </td>
-
+                      <td className="fluxo-valor-total">{formatarMoeda(total)}</td>
                       <td>
                         <div className="fluxo-acoes-linha">
                           {movimentacao.tipo === "entrada" ? (
-                            <button
-                              type="button"
-                              className="fluxo-acao fluxo-editar"
-                              onClick={() => editarEntrada(movimentacao)}
-                              aria-label={`Editar entrada de ${nomeProduto}`}
-                              title="Editar entrada"
-                            >
-                              <Pencil size={16} />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                className="fluxo-acao fluxo-editar"
+                                onClick={() => editarEntrada(movimentacao)}
+                                aria-label={`Editar entrada de ${nome}`}
+                                title="Editar entrada"
+                              >
+                                <Pencil size={16} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="fluxo-acao fluxo-excluir"
+                                onClick={() => excluirEntradaDoHistorico(movimentacao)}
+                                aria-label={`Excluir entrada de ${nome}`}
+                                title="Excluir do histórico"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
                           ) : (
                             <span className="fluxo-sem-acao">Automática</span>
                           )}
