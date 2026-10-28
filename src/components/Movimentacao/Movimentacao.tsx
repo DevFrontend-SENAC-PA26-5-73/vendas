@@ -10,7 +10,19 @@ const CHAVE_HISTORICO = "historico-movimentacoes-estoque";
 
 /* =========================
    Tipos
-========================= */
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { FormEvent } from "react";
+import { Pencil, Trash2 } from "lucide-react";
+
+import "./Movimentacao.css";
+
+const API_URL = "http://10.3.20.30:5001";
+const CHAVE_HISTORICO = "historico-movimentacoes-estoque";
 
 type TipoMovimentacao = "entrada" | "saida";
 
@@ -61,13 +73,7 @@ type Mensagem = {
 
 type RespostaErroApi = {
   message?: string | string[];
-  error?: string;
-  statusCode?: number;
 };
-
-/* =========================
-   Estado inicial
-========================= */
 
 function obterDataAtual() {
   const agora = new Date();
@@ -82,10 +88,6 @@ const formularioInicial: FormularioEntrada = {
   descricao: "",
   data_movimentacao: obterDataAtual(),
 };
-
-/* =========================
-   LocalStorage
-========================= */
 
 function carregarHistoricoLocal(): MovimentacaoVisual[] {
   try {
@@ -103,8 +105,23 @@ function carregarHistoricoLocal(): MovimentacaoVisual[] {
         m.tipo === "entrada" &&
         typeof m.produto_id === "number" &&
         typeof m.quantidade === "number"
+    const valor = localStorage.getItem(CHAVE_HISTORICO);
+    if (!valor) return [];
+
+    const dados: unknown = JSON.parse(valor);
+    if (!Array.isArray(dados)) return [];
+
+    return dados.filter((item): item is MovimentacaoVisual => {
+      if (!item || typeof item !== "object") return false;
+      const entrada = item as Partial<MovimentacaoVisual>;
+
+      return (
+        typeof entrada.id === "string" &&
+        entrada.tipo === "entrada" &&
+        typeof entrada.produto_id === "number" &&
+        typeof entrada.quantidade === "number"
       );
-    }) as MovimentacaoVisual[];
+    });
   } catch (erro) {
     console.error("Erro ao carregar histórico local:", erro);
     return [];
@@ -118,10 +135,6 @@ function salvarHistoricoLocal(entradas: MovimentacaoVisual[]) {
     console.error("Erro ao salvar histórico local:", erro);
   }
 }
-
-/* =========================
-   Formatação
-========================= */
 
 function formatarNumero(valor: number) {
   return Number(valor || 0).toLocaleString("pt-BR", {
@@ -144,6 +157,8 @@ function formatarData(data?: string) {
 
   const dataNormalizada = data.includes("T") ? data : `${data}T00:00:00`;
   const dataConvertida = new Date(dataNormalizada);
+  const valor = data.includes("T") ? data : `${data}T00:00:00`;
+  const dataConvertida = new Date(valor);
 
   if (Number.isNaN(dataConvertida.getTime())) return "Data inválida";
 
@@ -157,7 +172,6 @@ function formatarData(data?: string) {
 
 /* =========================
    Funções auxiliares
-========================= */
 
 function obterProduto(produtoId: number, produtos: Produto[]) {
   return produtos.find((produto) => produto.id === produtoId);
@@ -182,7 +196,12 @@ function obterMensagemErro(dados: unknown, status: number) {
   }
 
   if (typeof dados === "string" && dados.trim().length > 0) return dados;
+    const mensagem = (dados as RespostaErroApi).message;
+    if (Array.isArray(mensagem)) return mensagem.join(", ");
+    if (typeof mensagem === "string") return mensagem;
+  }
 
+  if (typeof dados === "string" && dados.trim()) return dados;
   return `Erro HTTP ${status}`;
 }
 
@@ -197,7 +216,6 @@ async function lerLista<T>(
 
 /* =========================
    Componente
-========================= */
 
 function Movimentacao() {
   const [formulario, setFormulario] = useState<FormularioEntrada>({
@@ -299,6 +317,66 @@ function Movimentacao() {
     [entradasSalvas, saidasAtendimento],
   );
 
+  const [entradasSalvas, setEntradasSalvas] =
+    useState<MovimentacaoVisual[]>(carregarHistoricoLocal);
+  const [entradaEmEdicao, setEntradaEmEdicao] =
+    useState<string | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [mensagem, setMensagem] = useState<Mensagem | null>(null);
+  const [busca, setBusca] = useState("");
+  const [filtroTipo, setFiltroTipo] =
+    useState<"todos" | TipoMovimentacao>("todos");
+
+  const produtoSelecionado = useMemo(() => {
+    const id = Number(formulario.produto_id);
+    return id ? produtos.find((produto) => produto.id === id) : undefined;
+  }, [formulario.produto_id, produtos]);
+
+  const precoUnitario = Number(produtoSelecionado?.preco ?? 0);
+  const categoriaProduto = produtoSelecionado?.tipo ?? "Selecione um produto";
+  const quantidadeInformada = Number(formulario.quantidade || 0);
+  const valorTotalFormulario = Number(
+    (quantidadeInformada * precoUnitario).toFixed(2),
+  );
+
+  const totalUnidadesEstoque = useMemo(
+    () =>
+      estoque.reduce(
+        (total, produto) => total + Number(produto.quantidade || 0),
+        0,
+      ),
+    [estoque],
+  );
+
+  const totalUnidadesVendidas = useMemo(
+    () =>
+      itensVenda.reduce(
+        (total, item) => total + Number(item.quantidade || 0),
+        0,
+      ),
+    [itensVenda],
+  );
+
+  const saidasAtendimento = useMemo<MovimentacaoVisual[]>(
+    () =>
+      itensVenda.map((item) => ({
+        id: `saida-${item.id}`,
+        tipo: "saida",
+        produto_id: item.produtos_id,
+        quantidade: Number(item.quantidade || 0),
+        preco_unitario: Number(Number(item.preco || 0).toFixed(2)),
+        descricao: `Saída gerada pela venda #${item.vendas_id}`,
+        venda_id: item.vendas_id,
+      })),
+    [itensVenda],
+  );
+
+  const historicoCompleto = useMemo(
+    () => [...entradasSalvas, ...saidasAtendimento],
+    [entradasSalvas, saidasAtendimento],
+  );
+
   const historicoFiltrado = useMemo(() => {
     const termo = busca.trim().toLowerCase();
 
@@ -309,6 +387,8 @@ function Movimentacao() {
       const produto = obterProduto(movimentacao.produto_id, produtos);
 
       const textoPesquisa = [produto?.nome, produto?.tipo, movimentacao.descricao]
+      const produto = obterProduto(movimentacao.produto_id, produtos);
+      const texto = [produto?.nome, produto?.tipo, movimentacao.descricao]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -368,6 +448,47 @@ function Movimentacao() {
     } catch (erro) {
       console.error("Erro ao carregar dados:", erro);
 
+      return (
+        (filtroTipo === "todos" || movimentacao.tipo === filtroTipo) &&
+        (!termo || texto.includes(termo))
+      );
+    });
+  }, [busca, filtroTipo, historicoCompleto, produtos]);
+
+  const carregarDados = useCallback(async () => {
+    try {
+      setCarregando(true);
+      setMensagem(null);
+
+      const [respostaProdutos, respostaEstoque, respostaItens] =
+        await Promise.all([
+          fetch(`${API_URL}/produtos`),
+          fetch(`${API_URL}/estoque`),
+          fetch(`${API_URL}/itemvenda`),
+        ]);
+
+      if (!respostaProdutos.ok) {
+        throw new Error("Não foi possível carregar os produtos.");
+      }
+
+      const dadosProdutos: unknown = await respostaProdutos.json();
+      setProdutos(Array.isArray(dadosProdutos) ? (dadosProdutos as Produto[]) : []);
+
+      if (respostaEstoque.ok) {
+        const dadosEstoque: unknown = await respostaEstoque.json();
+        setEstoque(Array.isArray(dadosEstoque) ? (dadosEstoque as Produto[]) : []);
+      } else {
+        setEstoque([]);
+      }
+
+      if (respostaItens.ok) {
+        const dadosItens: unknown = await respostaItens.json();
+        setItensVenda(Array.isArray(dadosItens) ? (dadosItens as ItemVenda[]) : []);
+      } else {
+        setItensVenda([]);
+      }
+    } catch (erro) {
+      console.error("Erro ao carregar dados:", erro);
       setMensagem({
         tipo: "erro",
         texto:
@@ -399,6 +520,14 @@ function Movimentacao() {
       [campo]: novoValor,
     }));
 
+  function alterarCampo(
+    campo: keyof FormularioEntrada,
+    novoValor: string,
+  ) {
+    setFormulario((atual) => ({
+      ...atual,
+      [campo]: novoValor,
+    }));
     setMensagem(null);
   }
 
@@ -407,7 +536,6 @@ function Movimentacao() {
       ...formularioInicial,
       data_movimentacao: obterDataAtual(),
     });
-
     setEntradaEmEdicao(null);
     setMensagem(null);
   }
@@ -425,12 +553,30 @@ function Movimentacao() {
     setEntradaEmEdicao(movimentacao.id);
     setMensagem(null);
 
+      data_movimentacao:
+        movimentacao.data_movimentacao ?? obterDataAtual(),
+    });
+    setEntradaEmEdicao(movimentacao.id);
+    setMensagem(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  /* =========================
-     POST /estoque
-  ========================= */
+  function excluirEntradaDoHistorico(movimentacao: MovimentacaoVisual) {
+    if (movimentacao.tipo !== "entrada") return;
+
+    const produto = obterProduto(movimentacao.produto_id, produtos);
+    const nome = produto?.nome ?? `Produto #${movimentacao.produto_id}`;
+
+    const confirmou = window.confirm(
+      [
+        `Excluir a entrada de ${nome} do histórico?`,
+        "",
+        `Quantidade registrada: ${movimentacao.quantidade}`,
+        "",
+        "Esta ação remove somente o registro salvo neste navegador.",
+        "A quantidade do estoque na API não será alterada.",
+      ].join("\n"),
+    );
 
   async function cadastrarEntrada(produtoId: number, quantidade: number) {
     const resposta = await fetch(`${API_URL}/estoque`, {
@@ -443,7 +589,33 @@ function Movimentacao() {
     });
 
     const dadosResposta = await lerResposta(resposta);
+    if (!confirmou) return;
 
+    setEntradasSalvas((atuais) =>
+      atuais.filter((entrada) => entrada.id !== movimentacao.id),
+    );
+
+    if (entradaEmEdicao === movimentacao.id) {
+      limparFormulario();
+    }
+
+    setMensagem({
+      tipo: "sucesso",
+      texto: "Entrada removida do histórico deste navegador.",
+    });
+  }
+
+  async function cadastrarEntrada(produtoId: number, quantidade: number) {
+    const resposta = await fetch(`${API_URL}/estoque`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ produto_id: produtoId, quantidade }),
+    });
+
+    const dados = await lerResposta(resposta);
     if (!resposta.ok) {
       throw new Error(obterMensagemErro(dadosResposta, resposta.status));
     }
@@ -454,6 +626,11 @@ function Movimentacao() {
   ========================= */
 
   async function atualizarEstoque(produtoId: number, novaQuantidade: number) {
+      throw new Error(obterMensagemErro(dados, resposta.status));
+    }
+  }
+
+  async function atualizarEstoque(produtoId: number, quantidade: number) {
     const resposta = await fetch(`${API_URL}/estoque/${produtoId}`, {
       method: "PATCH",
       headers: {
@@ -467,7 +644,10 @@ function Movimentacao() {
     });
 
     const dadosResposta = await lerResposta(resposta);
+      body: JSON.stringify({ produto_id: produtoId, quantidade }),
+    });
 
+    const dados = await lerResposta(resposta);
     if (!resposta.ok) {
       throw new Error(obterMensagemErro(dadosResposta, resposta.status));
     }
@@ -476,6 +656,10 @@ function Movimentacao() {
   /* =========================
      Salvar
   ========================= */
+
+      throw new Error(obterMensagemErro(dados, resposta.status));
+    }
+  }
 
   async function salvarEntrada(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -524,7 +708,24 @@ function Movimentacao() {
 
         const produtoNoEstoque = estoque.find(
           (produto) => produto.id === produtoId,
+      if (entradaEmEdicao) {
+        const anterior = entradasSalvas.find(
+          (entrada) => entrada.id === entradaEmEdicao,
         );
+
+        if (!anterior) {
+          throw new Error("A entrada selecionada não foi encontrada.");
+        }
+
+        const estoqueAtual = Number(
+          estoque.find((produto) => produto.id === produtoId)?.quantidade ?? 0,
+        );
+        const novaQuantidadeEstoque =
+          estoqueAtual + (quantidade - anterior.quantidade);
+
+        if (novaQuantidadeEstoque < 0) {
+          throw new Error("A alteração deixaria o estoque negativo.");
+        }
 
         const quantidadeAtual = Number(produtoNoEstoque?.quantidade ?? 0);
         const novaQuantidadeEstoque = quantidadeAtual + diferenca;
@@ -556,6 +757,31 @@ function Movimentacao() {
         // Nova entrada
         await cadastrarEntrada(produtoId, quantidade);
 
+        await atualizarEstoque(produtoId, novaQuantidadeEstoque);
+
+        setEntradasSalvas((atuais) =>
+          atuais.map((entrada) =>
+            entrada.id === entradaEmEdicao
+              ? {
+                  ...entrada,
+                  quantidade,
+                  preco_unitario: Number(precoUnitario.toFixed(2)),
+                  descricao:
+                    formulario.descricao.trim() ||
+                    "Entrada de produto no estoque",
+                  data_movimentacao: formulario.data_movimentacao,
+                }
+              : entrada,
+          ),
+        );
+
+        setMensagem({
+          tipo: "sucesso",
+          texto: "Entrada atualizada com sucesso.",
+        });
+      } else {
+        await cadastrarEntrada(produtoId, quantidade);
+
         const novaEntrada: MovimentacaoVisual = {
           id: `entrada-${Date.now()}`,
           tipo: "entrada",
@@ -574,12 +800,26 @@ function Movimentacao() {
       await carregarDados(false);
 
       setMensagem({ tipo: "sucesso", texto: textoSucesso });
+            formulario.descricao.trim() ||
+            "Entrada de produto no estoque",
+          data_movimentacao: formulario.data_movimentacao,
+        };
+
+        setEntradasSalvas((atuais) => [novaEntrada, ...atuais]);
+        setMensagem({
+          tipo: "sucesso",
+          texto: "Entrada registrada com sucesso.",
+        });
+      }
+
+      await carregarDados();
+      window.dispatchEvent(new CustomEvent("estoque-atualizado"));
+      window.dispatchEvent(new CustomEvent("produtos-atualizados"));
 
       setFormulario({
         ...formularioInicial,
         data_movimentacao: obterDataAtual(),
       });
-
       setEntradaEmEdicao(null);
     } catch (erro) {
       console.error("Erro ao salvar entrada:", erro);
@@ -596,10 +836,6 @@ function Movimentacao() {
     }
   }
 
-  /* =========================
-     Interface
-  ========================= */
-
   return (
     <section className="fluxo-caixa">
       <header className="fluxo-cabecalho">
@@ -609,6 +845,8 @@ function Movimentacao() {
           <div>
             <h1 className="medium-h1">Movimentação de estoque</h1>
 
+          <div>
+            <h1 className="medium-h1">Movimentação de estoque</h1>
             <p className="light-h3">
               Registre entradas e acompanhe as saídas realizadas pelo
               atendimento.
@@ -632,7 +870,6 @@ function Movimentacao() {
             <span className="fluxo-resumo-icone">+</span>
             <span className="light-h3">Unidades em estoque</span>
           </div>
-
           <strong className="bold-h2">
             {formatarNumero(totalUnidadesEstoque)}
           </strong>
@@ -645,7 +882,6 @@ function Movimentacao() {
             <span className="fluxo-resumo-icone">−</span>
             <span className="light-h3">Unidades vendidas</span>
           </div>
-
           <strong className="bold-h2">
             {formatarNumero(totalUnidadesVendidas)}
           </strong>
@@ -673,19 +909,17 @@ function Movimentacao() {
         <div className="fluxo-painel-cabecalho">
           <div>
             <h2 className="medium-h2">
-              {entradaEmEdicao !== null
-                ? "Editar entrada"
-                : "Nova entrada de produto"}
+              {entradaEmEdicao ? "Editar entrada" : "Nova entrada de produto"}
             </h2>
-
             <p className="light-h3">
-              {entradaEmEdicao !== null
+              {entradaEmEdicao
                 ? "Altere os dados da entrada selecionada."
                 : "Selecione um produto e informe a quantidade recebida."}
             </p>
           </div>
 
           {entradaEmEdicao !== null && (
+          {entradaEmEdicao && (
             <span className="fluxo-status-edicao medium-h3">Em edição</span>
           )}
         </div>
@@ -701,12 +935,11 @@ function Movimentacao() {
                   alterarCampo("produto_id", evento.target.value)
                 }
                 disabled={carregando || entradaEmEdicao !== null}
+                disabled={carregando || Boolean(entradaEmEdicao)}
                 required
               >
                 <option value="">
-                  {carregando
-                    ? "Carregando produtos..."
-                    : "Selecione um produto"}
+                  {carregando ? "Carregando produtos..." : "Selecione um produto"}
                 </option>
 
                 {produtos.map((produto) => (
@@ -728,7 +961,6 @@ function Movimentacao() {
                 onChange={(evento) =>
                   alterarCampo("quantidade", evento.target.value)
                 }
-                placeholder="Ex.: 10"
                 required
               />
             </label>
@@ -783,6 +1015,19 @@ function Movimentacao() {
             </label>
           </div>
 
+          {mensagem && (
+            <div
+              className={`fluxo-mensagem ${
+                mensagem.tipo === "sucesso"
+                  ? "fluxo-mensagem-sucesso"
+                  : "fluxo-mensagem-erro"
+              }`}
+              role="alert"
+            >
+              {mensagem.texto}
+            </div>
+          )}
+
           <div className="fluxo-acoes">
             <button
               type="button"
@@ -791,6 +1036,7 @@ function Movimentacao() {
               disabled={salvando}
             >
               {entradaEmEdicao !== null ? "Cancelar edição" : "Limpar"}
+              {entradaEmEdicao ? "Cancelar edição" : "Limpar"}
             </button>
 
             <button
@@ -801,6 +1047,7 @@ function Movimentacao() {
               {salvando
                 ? "Salvando..."
                 : entradaEmEdicao !== null
+                : entradaEmEdicao
                   ? "Atualizar entrada"
                   : "Registrar entrada"}
             </button>
@@ -817,6 +1064,8 @@ function Movimentacao() {
             <p className="light-h3">
               As entradas ficam salvas neste navegador. As saídas vêm das
               vendas do atendimento.
+            <p className="light-h3">
+              Entradas locais podem ser editadas ou removidas do histórico.
             </p>
           </div>
 
@@ -826,15 +1075,12 @@ function Movimentacao() {
               value={busca}
               onChange={(evento) => setBusca(evento.target.value)}
               placeholder="Buscar produto"
-              aria-label="Buscar produto"
             />
-
             <select
               value={filtroTipo}
               onChange={(evento) =>
                 setFiltroTipo(evento.target.value as "todos" | TipoMovimentacao)
               }
-              aria-label="Filtrar movimentações"
             >
               <option value="todos">Todas</option>
               <option value="entrada">Entradas</option>
@@ -891,6 +1137,10 @@ function Movimentacao() {
                   );
 
                   const estaEmEdicao = entradaEmEdicao === movimentacao.id;
+                  const produto = obterProduto(movimentacao.produto_id, produtos);
+                  const nome = produto?.nome ?? `Produto #${movimentacao.produto_id}`;
+                  const categoria = produto?.tipo ?? "Não informada";
+                  const total = movimentacao.quantidade * movimentacao.preco_unitario;
 
                   return (
                     <tr
@@ -940,6 +1190,55 @@ function Movimentacao() {
                             >
                               <Pencil size={16} />
                             </button>
+                      className={
+                        entradaEmEdicao === movimentacao.id
+                          ? "fluxo-linha-em-edicao"
+                          : ""
+                      }
+                    >
+                      <td>
+                        <span className={`fluxo-status fluxo-status-${movimentacao.tipo}`}>
+                          {movimentacao.tipo === "entrada" ? "Entrada" : "Saída"}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="fluxo-produto">
+                          <span className="fluxo-produto-avatar">
+                            {nome.charAt(0).toUpperCase()}
+                          </span>
+                          <strong>{nome}</strong>
+                        </div>
+                      </td>
+                      <td>{categoria}</td>
+                      <td>{movimentacao.descricao}</td>
+                      <td>{formatarData(movimentacao.data_movimentacao)}</td>
+                      <td>{formatarNumero(movimentacao.quantidade)} un.</td>
+                      <td>{formatarMoeda(movimentacao.preco_unitario)}</td>
+                      <td className="fluxo-valor-total">{formatarMoeda(total)}</td>
+                      <td>
+                        <div className="fluxo-acoes-linha">
+                          {movimentacao.tipo === "entrada" ? (
+                            <>
+                              <button
+                                type="button"
+                                className="fluxo-acao fluxo-editar"
+                                onClick={() => editarEntrada(movimentacao)}
+                                aria-label={`Editar entrada de ${nome}`}
+                                title="Editar entrada"
+                              >
+                                <Pencil size={16} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="fluxo-acao fluxo-excluir"
+                                onClick={() => excluirEntradaDoHistorico(movimentacao)}
+                                aria-label={`Excluir entrada de ${nome}`}
+                                title="Excluir do histórico"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
                           ) : (
                             <span className="fluxo-sem-acao">Automática</span>
                           )}
