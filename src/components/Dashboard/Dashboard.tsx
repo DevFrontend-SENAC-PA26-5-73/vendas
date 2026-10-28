@@ -7,7 +7,7 @@ import "./Dashboard.css";
 const API_URL = "https://vendas.gabrielpimentel.com.br";
 
 /* =========================
-   Tipos atuais da API
+   Tipos da API
 ========================= */
 
 type ClienteApi = {
@@ -40,16 +40,10 @@ type VendaApi = {
   cliente_id: number;
   transportadoras_id: number;
   funcionarios_id: number;
+  cliente?: ClienteApi | null;
+  pagamentos?: PagamentoApi[];
 
-  cliente: ClienteApi;
-  pagamentos: PagamentoApi[];
-
-  /*
-    Campos que você pode criar futuramente no back-end.
-    Como são opcionais, o front-end continuará funcionando
-    enquanto eles não existirem.
-  */
-
+  // Campos opcionais para o futuro
   nome_negocio?: string;
   empresa?: string;
   origem?: string;
@@ -59,14 +53,6 @@ type VendaApi = {
 type FuncionarioApi = {
   id: number;
   nome: string;
-  cpf: string;
-  rg: string;
-  data_nasc: string;
-  estado_civil: string;
-  contato: string;
-  endereco_id: number;
-  cargo_id: number;
-  departamento_id: number;
 };
 
 type ItemVendaApi = {
@@ -75,13 +61,6 @@ type ItemVendaApi = {
   preco: number;
   vendas_id: number;
   produtos_id: number;
-};
-
-type ProdutoBaixoEstoqueApi = {
-  id: number;
-  nome: string;
-  quantidade: number;
-  preco: number;
 };
 
 type PrevisaoVendaApi = {
@@ -97,28 +76,25 @@ type OrigemVendaApi = {
 };
 
 type DashboardApi = {
-  /* Campos que já existem */
-
   totalClientes: number;
   totalProdutos: number;
   totalVendas: number;
   totalPagamentos: number;
   valorTotalPagamentos: number;
   vendasRecentes: VendaApi[];
-  produtosBaixoEstoque: ProdutoBaixoEstoqueApi[];
+  produtosBaixoEstoque: {
+    id: number;
+    nome: string;
+    quantidade: number;
+    preco: number;
+  }[];
 
-  /*
-    Campos futuros esperados pelo seu front-end.
-    Você poderá adicioná-los no GET /dashboard.
-  */
-
+  // Campos opcionais: se o back-end passar a enviar, eles têm prioridade
   totalDespesas?: number;
   lucroBruto?: number;
-
   percentualVendas?: number;
   percentualDespesas?: number;
   percentualLucro?: number;
-
   previsaoVendas?: PrevisaoVendaApi[];
   origens?: OrigemVendaApi[];
 };
@@ -127,6 +103,7 @@ type DadosCompletos = {
   dashboard: DashboardApi;
   funcionarios: FuncionarioApi[];
   itensVenda: ItemVendaApi[];
+  pagamentos: PagamentoApi[];
 };
 
 type Periodo = "semanal" | "mensal" | "anual";
@@ -140,8 +117,16 @@ type ResumoCardProps = {
 };
 
 type GraficoApexProps = {
-  dashboard: DashboardApi;
+  previsaoVendas?: PrevisaoVendaApi[];
+  pagamentos: PagamentoApi[];
   periodo: Periodo;
+};
+
+type ItemOrigem = {
+  nome: string;
+  quantidade: number;
+  valor: number;
+  percentual: number;
 };
 
 /* =========================
@@ -156,11 +141,12 @@ function formatarMoeda(valor: number) {
 }
 
 function formatarData(data?: string) {
-  if (!data) {
-    return "Sem data";
-  }
+  if (!data) return "Sem data";
 
-  return new Date(data).toLocaleDateString("pt-BR", {
+  const convertida = new Date(data);
+  if (Number.isNaN(convertida.getTime())) return "Sem data";
+
+  return convertida.toLocaleDateString("pt-BR", {
     timeZone: "UTC",
     day: "2-digit",
     month: "short",
@@ -168,68 +154,103 @@ function formatarData(data?: string) {
   });
 }
 
-function formatarPercentual(valor?: number) {
-  if (valor === undefined || valor === null) {
-    return "0%";
+function formatarPercentual(valor?: number | null) {
+  if (valor === undefined || valor === null || !Number.isFinite(valor)) {
+    return "—";
   }
 
-  return `${valor.toLocaleString("pt-BR", {
+  const sinal = valor > 0 ? "+" : "";
+
+  return `${sinal}${valor.toLocaleString("pt-BR", {
     maximumFractionDigits: 1,
   })}%`;
 }
 
-function calcularValorVenda(
-  venda: VendaApi,
-  itensVenda: ItemVendaApi[],
-) {
-  const itensDaVenda = itensVenda.filter(
-    (item) => item.vendas_id === venda.id,
-  );
+function dataLocalISO(data: Date) {
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${data.getFullYear()}-${mes}-${dia}`;
+}
 
-  const valorItens = itensDaVenda.reduce((total, item) => {
-    return (
-      total +
-      Number(item.preco || 0) *
-        Number(item.quantidade || 0)
+function calcularValorVenda(venda: VendaApi, itensVenda: ItemVendaApi[]) {
+  const valorItens = itensVenda
+    .filter((item) => item.vendas_id === venda.id)
+    .reduce(
+      (total, item) =>
+        total + Number(item.preco || 0) * Number(item.quantidade || 0),
+      0,
     );
-  }, 0);
 
-  if (valorItens > 0) {
-    return valorItens;
-  }
+  if (valorItens > 0) return valorItens;
 
-  return venda.pagamentos.reduce((total, pagamento) => {
-    return total + Number(pagamento.valo_pagamento || 0);
-  }, 0);
+  return (venda.pagamentos ?? []).reduce(
+    (total, pagamento) => total + Number(pagamento.valo_pagamento || 0),
+    0,
+  );
 }
 
 function buscarNomeFuncionario(
   funcionarioId: number,
   funcionarios: FuncionarioApi[],
 ) {
-  const funcionario = funcionarios.find(
-    (item) => item.id === funcionarioId,
-  );
-
+  const funcionario = funcionarios.find((item) => item.id === funcionarioId);
   return funcionario?.nome ?? `Funcionário #${funcionarioId}`;
 }
 
 function gerarBarras(valores: number[]) {
-  if (valores.length === 0) {
-    return [20, 20, 20, 20];
-  }
+  if (valores.length === 0) return [20, 20, 20, 20];
 
   const maiorValor = Math.max(...valores);
+  if (maiorValor <= 0) return valores.map(() => 20);
 
-  if (maiorValor <= 0) {
-    return valores.map(() => 20);
-  }
+  return valores.map((valor) => Math.max(20, (valor / maiorValor) * 100));
+}
 
-  return valores.map((valor) => {
-    const altura = (valor / maiorValor) * 100;
+function nomeMetodoPagamento(metodo: string) {
+  const nomes: Record<string, string> = {
+    pix: "Pix",
+    dinheiro: "Dinheiro",
+    cartao_credito: "Cartão de crédito",
+    cartao_debito: "Cartão de débito",
+    boleto: "Boleto",
+  };
 
-    return Math.max(20, altura);
+  return nomes[metodo] ?? metodo;
+}
+
+// Tons da cor primária para o gráfico de rosca e a legenda
+const TONS_ORIGEM = [100, 72, 52, 36, 24];
+
+function corDaOrigem(indice: number) {
+  const tom = TONS_ORIGEM[Math.min(indice, TONS_ORIGEM.length - 1)];
+  return `color-mix(in srgb, var(--primaria) ${tom}%, white)`;
+}
+
+function agruparPorMes(pagamentos: PagamentoApi[]) {
+  const mapa = new Map<string, number>();
+
+  pagamentos.forEach((pagamento) => {
+    if (!pagamento.data_pagamento) return;
+    const chave = pagamento.data_pagamento.slice(0, 7);
+    mapa.set(
+      chave,
+      (mapa.get(chave) ?? 0) + Number(pagamento.valo_pagamento || 0),
+    );
   });
+
+  return mapa;
+}
+
+async function buscarLista<T>(url: string): Promise<T[]> {
+  try {
+    const resposta = await fetch(url);
+    if (!resposta.ok) return [];
+    const dados: unknown = await resposta.json();
+    return Array.isArray(dados) ? (dados as T[]) : [];
+  } catch (erro) {
+    console.warn(`Não foi possível carregar ${url}:`, erro);
+    return [];
+  }
 }
 
 /* =========================
@@ -247,7 +268,6 @@ function ResumoCard({
     <article className="dashboard-resumo-card">
       <div className="dashboard-resumo-informacoes">
         <span className="light-h3">{titulo}</span>
-
         <strong className="bold-h2">{valor}</strong>
       </div>
 
@@ -268,9 +288,7 @@ function ResumoCard({
       <div className="dashboard-tendencia">
         <span
           className={`dashboard-seta ${
-            tendencia === "alta"
-              ? "dashboard-seta-alta"
-              : "dashboard-seta-baixa"
+            tendencia === "alta" ? "dashboard-seta-alta" : "dashboard-seta-baixa"
           }`}
         >
           {tendencia === "alta" ? "↗" : "↘"}
@@ -286,132 +304,86 @@ function ResumoCard({
    Gráfico
 ========================= */
 
-function GraficoApex({
-  dashboard,
-  periodo,
-}: GraficoApexProps) {
+function GraficoApex({ previsaoVendas, pagamentos, periodo }: GraficoApexProps) {
   const dadosGrafico = useMemo(() => {
-    /*
-      Quando previsaoVendas existir no back-end,
-      ela terá prioridade no gráfico.
-    */
-
-    if (
-      dashboard.previsaoVendas &&
-      dashboard.previsaoVendas.length > 0
-    ) {
+    // Se o back-end enviar previsão, ela tem prioridade
+    if (previsaoVendas && previsaoVendas.length > 0) {
       return {
-        categorias: dashboard.previsaoVendas.map(
-          (item) => item.periodo,
-        ),
-
-        valores: dashboard.previsaoVendas.map(
-          (item) => Number(item.valor || 0),
-        ),
-
+        categorias: previsaoVendas.map((item) => item.periodo),
+        valores: previsaoVendas.map((item) => Number(item.valor || 0)),
         nomeSerie: "Previsão de vendas",
       };
     }
 
-    /*
-      Enquanto a previsão não existe, o gráfico utiliza
-      os pagamentos reais agrupados por período.
-    */
+    // Caso contrário usa TODOS os pagamentos, agrupados pelo período escolhido
+    const hoje = new Date();
+    const categorias: string[] = [];
+    const chaves: string[] = [];
 
-    const grupos = new Map<
-      string,
-      {
-        ordem: string;
-        rotulo: string;
-        valor: number;
+    if (periodo === "semanal") {
+      for (let i = 6; i >= 0; i--) {
+        const dia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - i);
+        chaves.push(dataLocalISO(dia));
+        categorias.push(
+          dia.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        );
       }
-    >();
+    }
 
-    dashboard.vendasRecentes.forEach((venda) => {
-      venda.pagamentos.forEach((pagamento) => {
-        if (!pagamento.data_pagamento) {
-          return;
-        }
+    if (periodo === "mensal") {
+      for (let i = 5; i >= 0; i--) {
+        const mes = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+        chaves.push(dataLocalISO(mes).slice(0, 7));
+        categorias.push(
+          mes.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }),
+        );
+      }
+    }
 
-        const data = new Date(pagamento.data_pagamento);
+    if (periodo === "anual") {
+      const anos = pagamentos
+        .map((p) => Number(p.data_pagamento?.slice(0, 4)))
+        .filter((ano) => Number.isFinite(ano) && ano > 0);
 
-        let ordem = "";
-        let rotulo = "";
+      const anoInicial = anos.length > 0 ? Math.min(...anos) : hoje.getFullYear();
 
-        if (periodo === "semanal") {
-          ordem = data.toISOString().slice(0, 10);
+      for (let ano = anoInicial; ano <= hoje.getFullYear(); ano++) {
+        chaves.push(String(ano));
+        categorias.push(String(ano));
+      }
+    }
 
-          rotulo = data.toLocaleDateString("pt-BR", {
-            timeZone: "UTC",
-            day: "2-digit",
-            month: "2-digit",
-          });
-        }
+    const tamanhoChave = periodo === "semanal" ? 10 : periodo === "mensal" ? 7 : 4;
+    const totais = new Map<string, number>(chaves.map((chave) => [chave, 0]));
 
-        if (periodo === "mensal") {
-          const ano = data.getUTCFullYear();
-          const mes = String(
-            data.getUTCMonth() + 1,
-          ).padStart(2, "0");
-
-          ordem = `${ano}-${mes}`;
-
-          rotulo = data.toLocaleDateString("pt-BR", {
-            timeZone: "UTC",
-            month: "short",
-            year: "numeric",
-          });
-        }
-
-        if (periodo === "anual") {
-          ordem = String(data.getUTCFullYear());
-          rotulo = ordem;
-        }
-
-        const grupoExistente = grupos.get(ordem);
-
-        grupos.set(ordem, {
-          ordem,
-          rotulo,
-          valor:
-            Number(grupoExistente?.valor || 0) +
-            Number(pagamento.valo_pagamento || 0),
-        });
-      });
+    pagamentos.forEach((pagamento) => {
+      if (!pagamento.data_pagamento) return;
+      const chave = pagamento.data_pagamento.slice(0, tamanhoChave);
+      if (totais.has(chave)) {
+        totais.set(
+          chave,
+          (totais.get(chave) ?? 0) + Number(pagamento.valo_pagamento || 0),
+        );
+      }
     });
 
-    const resultado = Array.from(grupos.values()).sort(
-      (primeiro, segundo) =>
-        primeiro.ordem.localeCompare(segundo.ordem),
-    );
-
     return {
-      categorias: resultado.map((item) => item.rotulo),
-      valores: resultado.map((item) => item.valor),
+      categorias,
+      valores: chaves.map((chave) => Number((totais.get(chave) ?? 0).toFixed(2))),
       nomeSerie: "Vendas realizadas",
     };
-  }, [dashboard, periodo]);
+  }, [previsaoVendas, pagamentos, periodo]);
 
   const options: ApexOptions = {
     chart: {
       id: "grafico-previsao-vendas",
-      toolbar: {
-        show: false,
-      },
+      toolbar: { show: false },
     },
-
-    xaxis: {
-      categories: dadosGrafico.categorias,
-    },
-
+    xaxis: { categories: dadosGrafico.categorias },
     yaxis: {
-      labels: {
-        formatter: (valor) => formatarMoeda(valor),
-      },
+      labels: { formatter: (valor) => formatarMoeda(valor) },
     },
-
     colors: ["var(--primaria)"],
-
     plotOptions: {
       bar: {
         columnWidth: "45%",
@@ -419,43 +391,20 @@ function GraficoApex({
         borderRadiusApplication: "end",
       },
     },
-
-    dataLabels: {
-      enabled: false,
-    },
-
+    dataLabels: { enabled: false },
     tooltip: {
-      y: {
-        formatter: (valor) => formatarMoeda(valor),
-      },
+   y: {
+  formatter: (valor) => formatarMoeda(Number(valor ?? 0)),
+},
     },
-
-    noData: {
-      text: "Nenhuma venda encontrada",
-    },
+    noData: { text: "Nenhuma venda encontrada" },
   };
 
-  const series = [
-    {
-      name: dadosGrafico.nomeSerie,
-      data: dadosGrafico.valores,
-    },
-  ];
+  const series = [{ name: dadosGrafico.nomeSerie, data: dadosGrafico.valores }];
 
   return (
-    <div
-      style={{
-        width: "100%",
-        marginTop: "20px",
-      }}
-    >
-      <Chart
-        options={options}
-        series={series}
-        type="bar"
-        width="100%"
-        height={260}
-      />
+    <div style={{ width: "100%", marginTop: "20px" }}>
+      <Chart options={options} series={series} type="bar" width="100%" height={260} />
     </div>
   );
 }
@@ -465,103 +414,68 @@ function GraficoApex({
 ========================= */
 
 function Dashboard() {
-  const [dados, setDados] =
-    useState<DadosCompletos | null>(null);
-
-  const [periodo, setPeriodo] =
-    useState<Periodo>("mensal");
-
-  const [carregando, setCarregando] =
-    useState(true);
-
-  const [erro, setErro] =
-    useState<string | null>(null);
+  const [dados, setDados] = useState<DadosCompletos | null>(null);
+  const [periodo, setPeriodo] = useState<Periodo>("mensal");
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [selecionadas, setSelecionadas] = useState<number[]>([]);
 
   async function carregarDashboard() {
     try {
       setCarregando(true);
       setErro(null);
 
-      const [
-        respostaDashboard,
-        respostaFuncionarios,
-        respostaItensVenda,
-      ] = await Promise.all([
-        fetch(`${API_URL}/dashboard`),
-        fetch(`${API_URL}/funcionarios`),
-        fetch(`${API_URL}/itemvenda`),
-      ]);
+      const respostaDashboard = await fetch(`${API_URL}/dashboard`);
 
       if (!respostaDashboard.ok) {
-        throw new Error(
-          `Erro ${respostaDashboard.status} ao buscar o dashboard.`,
-        );
+        throw new Error(`Erro ${respostaDashboard.status} ao buscar o dashboard.`);
       }
 
-      if (!respostaFuncionarios.ok) {
-        throw new Error(
-          `Erro ${respostaFuncionarios.status} ao buscar funcionários.`,
-        );
-      }
+      const dashboardBruto = (await respostaDashboard.json()) as DashboardApi;
 
-      if (!respostaItensVenda.ok) {
-        throw new Error(
-          `Erro ${respostaItensVenda.status} ao buscar itens das vendas.`,
-        );
-      }
-
-      const [
-        dashboard,
-        funcionarios,
-        itensVenda,
-      ] = await Promise.all([
-        respostaDashboard.json() as Promise<DashboardApi>,
-        respostaFuncionarios.json() as Promise<
-          FuncionarioApi[]
-        >,
-        respostaItensVenda.json() as Promise<
-          ItemVendaApi[]
-        >,
+      // Listas auxiliares: se alguma falhar, o dashboard continua funcionando
+      const [funcionarios, itensVenda, pagamentos] = await Promise.all([
+        buscarLista<FuncionarioApi>(`${API_URL}/funcionarios`),
+        buscarLista<ItemVendaApi>(`${API_URL}/itemvenda`),
+        buscarLista<PagamentoApi>(`${API_URL}/pagamentos`),
       ]);
 
-      setDados({
-        dashboard,
-        funcionarios,
-        itensVenda,
-      });
-    } catch (erroDesconhecido) {
-      console.error(
-        "Erro ao carregar dashboard:",
-        erroDesconhecido,
-      );
+      const dashboard: DashboardApi = {
+        ...dashboardBruto,
+        vendasRecentes: dashboardBruto.vendasRecentes ?? [],
+      };
 
-      if (erroDesconhecido instanceof Error) {
-        setErro(erroDesconhecido.message);
-      } else {
-        setErro(
-          "Não foi possível carregar o dashboard.",
-        );
-      }
+      // Sem /pagamentos, usa os pagamentos que vieram nas vendas recentes
+      const pagamentosFinais =
+        pagamentos.length > 0
+          ? pagamentos
+          : dashboard.vendasRecentes.flatMap((venda) => venda.pagamentos ?? []);
+
+      setDados({ dashboard, funcionarios, itensVenda, pagamentos: pagamentosFinais });
+      setSelecionadas([]);
+    } catch (erroDesconhecido) {
+      console.error("Erro ao carregar dashboard:", erroDesconhecido);
+
+      setErro(
+        erroDesconhecido instanceof Error
+          ? erroDesconhecido.message
+          : "Não foi possível carregar o dashboard.",
+      );
     } finally {
       setCarregando(false);
     }
   }
 
   useEffect(() => {
-    carregarDashboard();
+    void carregarDashboard();
   }, []);
 
   if (carregando) {
     return (
       <section className="dashboard">
         <article className="dashboard-card">
-          <h2 className="medium-h2">
-            Carregando dashboard...
-          </h2>
-
-          <p className="light-h3">
-            Buscando os dados da API.
-          </p>
+          <h2 className="medium-h2">Carregando dashboard...</h2>
+          <p className="light-h3">Buscando os dados da API.</p>
         </article>
       </section>
     );
@@ -571,16 +485,13 @@ function Dashboard() {
     return (
       <section className="dashboard">
         <article className="dashboard-card">
-          <h2 className="medium-h2">
-            Erro ao carregar o dashboard
-          </h2>
-
+          <h2 className="medium-h2">Erro ao carregar o dashboard</h2>
           <p className="light-h3">{erro}</p>
 
           <button
             type="button"
             className="dashboard-ver-todos medium-h3"
-            onClick={carregarDashboard}
+            onClick={() => void carregarDashboard()}
           >
             Tentar novamente
           </button>
@@ -589,303 +500,254 @@ function Dashboard() {
     );
   }
 
-  if (!dados) {
-    return null;
-  }
+  if (!dados) return null;
 
-  const {
-    dashboard,
-    funcionarios,
-    itensVenda,
-  } = dados;
+  const { dashboard, funcionarios, itensVenda, pagamentos } = dados;
 
-  /*
-    Valores existentes e futuros.
-    Enquanto o back-end não fornecer despesas e lucro,
-    aparecerá R$ 0,00.
-  */
+  /* ----- Cards superiores ----- */
 
-  const totalVendas =
-    Number(dashboard.valorTotalPagamentos || 0);
-
-  const totalDespesas =
-    Number(dashboard.totalDespesas || 0);
+  const totalVendas = Number(dashboard.valorTotalPagamentos || 0);
+  const totalDespesas = Number(dashboard.totalDespesas || 0);
 
   const lucroBruto =
     dashboard.lucroBruto !== undefined
       ? Number(dashboard.lucroBruto)
       : Math.max(0, totalVendas - totalDespesas);
 
-  const valoresVendas =
-    dashboard.vendasRecentes.map((venda) =>
-      calcularValorVenda(venda, itensVenda),
-    );
+  // Variação do mês atual em relação ao mês anterior (calculada dos pagamentos)
+  const totaisMensais = agruparPorMes(pagamentos);
+  const agora = new Date();
+  const chaveMesAtual = dataLocalISO(agora).slice(0, 7);
+  const chaveMesAnterior = dataLocalISO(
+    new Date(agora.getFullYear(), agora.getMonth() - 1, 1),
+  ).slice(0, 7);
 
-  const barrasVendas =
-    gerarBarras(valoresVendas);
+  const vendasMesAtual = totaisMensais.get(chaveMesAtual) ?? 0;
+  const vendasMesAnterior = totaisMensais.get(chaveMesAnterior) ?? 0;
 
-  const percentualVendas =
-    formatarPercentual(
-      dashboard.percentualVendas,
-    );
+  const variacaoVendas =
+    vendasMesAnterior > 0
+      ? ((vendasMesAtual - vendasMesAnterior) / vendasMesAnterior) * 100
+      : null;
+
+  const percentualVendas = dashboard.percentualVendas ?? variacaoVendas;
 
   const percentualDespesas =
-    formatarPercentual(
-      dashboard.percentualDespesas,
-    );
+    dashboard.percentualDespesas ?? (totalDespesas === 0 ? 0 : null);
 
+  // Sem despesas cadastradas, o lucro bruto acompanha as vendas
   const percentualLucro =
-    formatarPercentual(
-      dashboard.percentualLucro,
+    dashboard.percentualLucro ?? (totalDespesas === 0 ? variacaoVendas : null);
+
+  // Mini gráficos: últimas vendas em ordem cronológica (a mais recente é a última barra)
+  const valoresVendas = [...dashboard.vendasRecentes]
+    .sort((a, b) => a.id - b.id)
+    .map((venda) => calcularValorVenda(venda, itensVenda));
+
+  const barrasVendas = gerarBarras(valoresVendas);
+
+  /* ----- Origem / formas de pagamento ----- */
+
+  const origensApi = dashboard.origens ?? [];
+  const usaOrigensApi = origensApi.length > 0;
+
+  let itensOrigem: ItemOrigem[] = [];
+
+  if (usaOrigensApi) {
+    itensOrigem = origensApi.map((origem) => ({
+      nome: origem.nome,
+      quantidade: Number(origem.quantidade || 0),
+      valor: Number(origem.valor || 0),
+      percentual: Number(origem.percentual || 0),
+    }));
+  } else {
+    const porMetodo = new Map<string, { quantidade: number; valor: number }>();
+
+    pagamentos.forEach((pagamento) => {
+      const atual = porMetodo.get(pagamento.metodo_pagamento) ?? {
+        quantidade: 0,
+        valor: 0,
+      };
+
+      porMetodo.set(pagamento.metodo_pagamento, {
+        quantidade: atual.quantidade + 1,
+        valor: atual.valor + Number(pagamento.valo_pagamento || 0),
+      });
+    });
+
+    const totalGeral = Array.from(porMetodo.values()).reduce(
+      (soma, item) => soma + item.valor,
+      0,
     );
 
-  /*
-    Origem das vendas.
-    Enquanto o back-end não devolver origens,
-    os valores permanecem zerados.
-  */
+    itensOrigem = Array.from(porMetodo.entries())
+      .map(([metodo, item]) => ({
+        nome: nomeMetodoPagamento(metodo),
+        quantidade: item.quantidade,
+        valor: item.valor,
+        percentual: totalGeral > 0 ? (item.valor / totalGeral) * 100 : 0,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+  }
 
-  const origens =
-    dashboard.origens ?? [];
+  const totalPorOrigem = itensOrigem.reduce((soma, item) => soma + item.valor, 0);
+  const totalQuantidade = itensOrigem.reduce((soma, item) => soma + item.quantidade, 0);
+  const principalOrigem = itensOrigem[0];
 
-  const origemWebsite = origens.find(
-    (origem) =>
-      origem.nome.toLowerCase() === "website",
-  );
+  let acumulado = 0;
+  const trechosRosca = itensOrigem.map((item, indice) => {
+    const inicio = acumulado;
+    acumulado += item.percentual;
+    return `${corDaOrigem(indice)} ${inicio}% ${Math.min(acumulado, 100)}%`;
+  });
 
-  const origemRedesSociais = origens.find(
-    (origem) =>
-      origem.nome
-        .toLowerCase()
-        .includes("rede"),
-  );
+  const fundoRosca =
+    itensOrigem.length > 0 && totalPorOrigem > 0
+      ? `conic-gradient(${trechosRosca.join(", ")}, var(--c) ${Math.min(acumulado, 100)}% 100%)`
+      : "var(--c)";
 
-  const origemEmail = origens.find(
-    (origem) =>
-      origem.nome
-        .toLowerCase()
-        .includes("email") ||
-      origem.nome
-        .toLowerCase()
-        .includes("e-mail"),
-  );
+  /* ----- Seleção na tabela ----- */
 
-  const totalPorOrigem = origens.reduce(
-    (total, origem) =>
-      total + Number(origem.valor || 0),
-    0,
-  );
+  const idsVendas = dashboard.vendasRecentes.map((venda) => venda.id);
+  const todasSelecionadas =
+    idsVendas.length > 0 && idsVendas.every((id) => selecionadas.includes(id));
 
-  const totalContatos = origens.reduce(
-    (total, origem) =>
-      total + Number(origem.quantidade || 0),
-    0,
-  );
+  function alternarTodas() {
+    setSelecionadas(todasSelecionadas ? [] : idsVendas);
+  }
 
-  const maiorPercentualOrigem =
-    origens.length > 0
-      ? Math.max(
-          ...origens.map((origem) =>
-            Number(origem.percentual || 0),
-          ),
-        )
-      : 0;
+  function alternarVenda(id: number) {
+    setSelecionadas((atuais) =>
+      atuais.includes(id) ? atuais.filter((item) => item !== id) : [...atuais, id],
+    );
+  }
 
   return (
     <section className="dashboard">
       {/* Cards superiores */}
-
       <div className="dashboard-resumos">
         <ResumoCard
           titulo="Total de vendas"
           valor={formatarMoeda(totalVendas)}
-          percentual={percentualVendas}
-          tendencia={
-            Number(
-              dashboard.percentualVendas || 0,
-            ) >= 0
-              ? "alta"
-              : "baixa"
-          }
+          percentual={formatarPercentual(percentualVendas)}
+          tendencia={Number(percentualVendas ?? 0) >= 0 ? "alta" : "baixa"}
           barras={barrasVendas}
         />
 
         <ResumoCard
           titulo="Despesas"
           valor={formatarMoeda(totalDespesas)}
-          percentual={percentualDespesas}
-          tendencia={
-            Number(
-              dashboard.percentualDespesas || 0,
-            ) > 0
-              ? "baixa"
-              : "alta"
-          }
+          percentual={formatarPercentual(percentualDespesas)}
+          tendencia={Number(percentualDespesas ?? 0) > 0 ? "baixa" : "alta"}
           barras={[20, 20, 20]}
         />
 
         <ResumoCard
           titulo="Lucro bruto"
           valor={formatarMoeda(lucroBruto)}
-          percentual={percentualLucro}
-          tendencia={
-            Number(
-              dashboard.percentualLucro || 0,
-            ) >= 0
-              ? "alta"
-              : "baixa"
-          }
-          barras={[20, 20, 20, 20, 20]}
+          percentual={formatarPercentual(percentualLucro)}
+          tendencia={Number(percentualLucro ?? 0) >= 0 ? "alta" : "baixa"}
+          barras={barrasVendas}
         />
       </div>
 
       {/* Parte central */}
-
       <div className="dashboard-centro">
         <article className="dashboard-card dashboard-previsao">
           <div className="dashboard-card-cabecalho">
             <h2 className="medium-h2">
-              Previsão de vendas
+              {dashboard.previsaoVendas && dashboard.previsaoVendas.length > 0
+                ? "Previsão de vendas"
+                : "Vendas por período"}
             </h2>
 
             <select
               className="dashboard-periodo"
               value={periodo}
-              aria-label="Período da previsão de vendas"
-              onChange={(evento) =>
-                setPeriodo(
-                  evento.target.value as Periodo,
-                )
-              }
+              aria-label="Período do gráfico de vendas"
+              onChange={(evento) => setPeriodo(evento.target.value as Periodo)}
             >
-              <option value="semanal">
-                Semanal
-              </option>
-
-              <option value="mensal">
-                Mensal
-              </option>
-
-              <option value="anual">
-                Anual
-              </option>
+              <option value="semanal">Semanal</option>
+              <option value="mensal">Mensal</option>
+              <option value="anual">Anual</option>
             </select>
           </div>
 
           <GraficoApex
-            dashboard={dashboard}
+            previsaoVendas={dashboard.previsaoVendas}
+            pagamentos={pagamentos}
             periodo={periodo}
           />
         </article>
 
-        {/* Origens */}
-
+        {/* Origem das vendas (ou formas de pagamento, enquanto a API não envia origens) */}
         <article className="dashboard-card dashboard-origens">
           <div className="dashboard-card-cabecalho">
             <h2 className="medium-h2">
-              Origem
+              {usaOrigensApi ? "Origem" : "Formas de pagamento"}
             </h2>
 
             <span className="light-h3">
-              {totalContatos} contatos
+              {totalQuantidade} {usaOrigensApi ? "contatos" : "pagamentos"}
             </span>
           </div>
 
           <div className="dashboard-origem-total">
-            <strong className="bold-h1">
-              {formatarMoeda(totalPorOrigem)}
-            </strong>
+            <strong className="bold-h1">{formatarMoeda(totalPorOrigem)}</strong>
 
             <span className="light-h4">
-              Total por origem
+              {usaOrigensApi ? "Total por origem" : "Total recebido"}
             </span>
           </div>
 
-          <div
-            className="dashboard-circulo"
-            style={{
-              background: `conic-gradient(
-                var(--primaria) 0 ${maiorPercentualOrigem}%,
-                var(--c) ${maiorPercentualOrigem}% 100%
-              )`,
-            }}
-          >
+          <div className="dashboard-circulo" style={{ background: fundoRosca }}>
             <div className="dashboard-circulo-centro">
               <strong className="medium-h2">
-                {maiorPercentualOrigem.toLocaleString(
-                  "pt-BR",
-                  {
-                    maximumFractionDigits: 1,
-                  },
-                )}
+                {(principalOrigem?.percentual ?? 0).toLocaleString("pt-BR", {
+                  maximumFractionDigits: 0,
+                })}
                 %
               </strong>
 
-              <span className="light-h4">
-                contatos
-              </span>
+              <span className="light-h4">{principalOrigem?.nome ?? "sem dados"}</span>
             </div>
           </div>
 
           <div className="dashboard-lista-origens">
-            <div className="dashboard-origem-item">
-              <span className="dashboard-cor dashboard-cor-site" />
+            {itensOrigem.length === 0 ? (
+              <p className="light-h3">Nenhum pagamento registrado.</p>
+            ) : (
+              itensOrigem.map((item, indice) => (
+                <div className="dashboard-origem-item" key={item.nome}>
+                  <span
+                    className="dashboard-cor"
+                    style={{ background: corDaOrigem(indice) }}
+                  />
 
-              <span className="light-h3">
-                Website
-              </span>
+                  <span className="light-h3">{item.nome}</span>
 
-              <strong className="medium-h3">
-                {origemWebsite?.quantidade ?? 0}
-              </strong>
-            </div>
-
-            <div className="dashboard-origem-item">
-              <span className="dashboard-cor dashboard-cor-social" />
-
-              <span className="light-h3">
-                Redes sociais
-              </span>
-
-              <strong className="medium-h3">
-                {origemRedesSociais?.quantidade ??
-                  0}
-              </strong>
-            </div>
-
-            <div className="dashboard-origem-item">
-              <span className="dashboard-cor dashboard-cor-email" />
-
-              <span className="light-h3">
-                E-mails
-              </span>
-
-              <strong className="medium-h3">
-                {origemEmail?.quantidade ?? 0}
-              </strong>
-            </div>
+                  <strong className="medium-h3">
+                    {usaOrigensApi ? item.quantidade : formatarMoeda(item.valor)}
+                  </strong>
+                </div>
+              ))
+            )}
           </div>
         </article>
       </div>
 
       {/* Vendas recentes */}
-
       <article className="dashboard-tabela-card">
         <div className="dashboard-tabela-topo">
           <div>
-            <h2 className="medium-h2">
-              Vendas recentes
-            </h2>
-
-            <p className="light-h3">
-              Últimos negócios registrados
-            </p>
+            <h2 className="medium-h2">Vendas recentes</h2>
+            <p className="light-h3">Últimos negócios registrados</p>
           </div>
 
           <button
             type="button"
             className="dashboard-ver-todos medium-h3"
-            onClick={carregarDashboard}
+            onClick={() => void carregarDashboard()}
           >
             Atualizar
           </button>
@@ -899,141 +761,86 @@ function Dashboard() {
                   <input
                     type="checkbox"
                     aria-label="Selecionar todas as vendas"
+                    checked={todasSelecionadas}
+                    onChange={alternarTodas}
                   />
                 </th>
 
-                <th className="medium-h3">
-                  Nome do negócio
-                </th>
-
-                <th className="medium-h3">
-                  Empresa
-                </th>
-
-                <th className="medium-h3">
-                  Preço
-                </th>
-
-                <th className="medium-h3">
-                  Data da venda
-                </th>
-
-                <th className="medium-h3">
-                  Responsável
-                </th>
+                <th className="medium-h3">Nome do negócio</th>
+                <th className="medium-h3">Empresa</th>
+                <th className="medium-h3">Preço</th>
+                <th className="medium-h3">Data da venda</th>
+                <th className="medium-h3">Responsável</th>
               </tr>
             </thead>
 
             <tbody>
-              {dashboard.vendasRecentes.length ===
-              0 ? (
+              {dashboard.vendasRecentes.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
                     className="light-h3"
-                    style={{
-                      padding: "40px",
-                      textAlign: "center",
-                    }}
+                    style={{ padding: "40px", textAlign: "center" }}
                   >
                     Nenhuma venda encontrada.
                   </td>
                 </tr>
               ) : (
-                dashboard.vendasRecentes.map(
-                  (venda) => {
-                    const primeiroPagamento =
-                      venda.pagamentos[0];
+                dashboard.vendasRecentes.map((venda) => {
+                  const primeiroPagamento = venda.pagamentos?.[0];
+                  const valorVenda = calcularValorVenda(venda, itensVenda);
 
-                    const valorVenda =
-                      calcularValorVenda(
-                        venda,
-                        itensVenda,
-                      );
+                  const nomeFuncionario = buscarNomeFuncionario(
+                    venda.funcionarios_id,
+                    funcionarios,
+                  );
 
-                    const nomeFuncionario =
-                      buscarNomeFuncionario(
-                        venda.funcionarios_id,
-                        funcionarios,
-                      );
+                  const nomeNegocio = venda.nome_negocio ?? `Venda #${venda.id}`;
 
-                    const nomeNegocio =
-                      venda.nome_negocio ??
-                      `Venda #${venda.id}`;
+                  // Enquanto não existir "empresa", mostra o nome do cliente
+                  const nomeEmpresa =
+                    venda.empresa ?? venda.cliente?.nome ?? `Cliente #${venda.cliente_id}`;
 
-                    /*
-                      Usa empresa quando o campo
-                      existir futuramente.
+                  const dataVenda = venda.data_venda ?? primeiroPagamento?.data_pagamento;
 
-                      Enquanto não existir, mostra
-                      o nome do cliente.
-                    */
+                  return (
+                    <tr key={venda.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Selecionar ${nomeNegocio}`}
+                          checked={selecionadas.includes(venda.id)}
+                          onChange={() => alternarVenda(venda.id)}
+                        />
+                      </td>
 
-                    const nomeEmpresa =
-                      venda.empresa ??
-                      venda.cliente.nome;
+                      <td className="light-h3">{nomeNegocio}</td>
 
-                    const dataVenda =
-                      venda.data_venda ??
-                      primeiroPagamento
-                        ?.data_pagamento;
+                      <td>
+                        <div className="dashboard-empresa">
+                          <span className="dashboard-avatar">
+                            {nomeEmpresa.charAt(0).toUpperCase()}
+                          </span>
 
-                    return (
-                      <tr key={venda.id}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            aria-label={`Selecionar ${nomeNegocio}`}
-                          />
-                        </td>
+                          <span className="light-h3">{nomeEmpresa}</span>
+                        </div>
+                      </td>
 
-                        <td className="light-h3">
-                          {nomeNegocio}
-                        </td>
+                      <td className="medium-h3">{formatarMoeda(valorVenda)}</td>
+                      <td className="light-h3">{formatarData(dataVenda)}</td>
 
-                        <td>
-                          <div className="dashboard-empresa">
-                            <span className="dashboard-avatar">
-                              {nomeEmpresa
-                                .charAt(0)
-                                .toUpperCase()}
-                            </span>
+                      <td>
+                        <div className="dashboard-responsavel">
+                          <span className="dashboard-avatar">
+                            {nomeFuncionario.charAt(0).toUpperCase()}
+                          </span>
 
-                            <span className="light-h3">
-                              {nomeEmpresa}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td className="medium-h3">
-                          {formatarMoeda(
-                            valorVenda,
-                          )}
-                        </td>
-
-                        <td className="light-h3">
-                          {formatarData(
-                            dataVenda,
-                          )}
-                        </td>
-
-                        <td>
-                          <div className="dashboard-responsavel">
-                            <span className="dashboard-avatar">
-                              {nomeFuncionario
-                                .charAt(0)
-                                .toUpperCase()}
-                            </span>
-
-                            <span className="light-h3">
-                              {nomeFuncionario}
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  },
-                )
+                          <span className="light-h3">{nomeFuncionario}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
