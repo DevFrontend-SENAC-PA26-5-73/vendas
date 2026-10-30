@@ -8,6 +8,13 @@ import type {
   Produto,
   TipoMovimentacao,
 } from "../../types/api";
+import {
+  lerMargensCategoriasProdutos,
+  normalizarCategoriaProduto,
+} from "../../lib/margensProdutos";
+import SortableHeader from "../SortableHeader/SortableHeader";
+import { ordenarLista } from "../../lib/ordenacao";
+import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 
 import "./Movimentacao.css";
 
@@ -26,6 +33,10 @@ type Mensagem = {
   tipo: "sucesso" | "erro";
   texto: string;
 };
+
+type ColunaOrdenacaoMovimento =
+  | "tipo" | "produto" | "categoria" | "descricao" | "data"
+  | "venda" | "quantidade" | "unitario" | "total";
 
 const formularioInicial: FormularioMovimentacao = {
   produto_id: "",
@@ -71,15 +82,16 @@ function formatarData(data?: string) {
 }
 
 function descricaoPadrao() {
-  return "Compra de estoque";
+  return "Entrada de estoque";
 }
 
 /* =========================
    Componente
 ========================= */
 
-function Movimentacao() {
+function Movimentacao({ buscaGlobal }: { buscaGlobal: string }) {
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [margensCategorias] = useState(lerMargensCategoriasProdutos);
   const [movimentacoes, setMovimentacoes] = useState<MovimentacaoEstoque[]>([]);
   const [formulario, setFormulario] =
     useState<FormularioMovimentacao>(formularioInicial);
@@ -89,6 +101,10 @@ function Movimentacao() {
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] =
     useState<"todos" | TipoMovimentacao>("todos");
+  const [ordenacao, setOrdenacao] = useState<{
+    coluna: ColunaOrdenacaoMovimento;
+    direcao: DirecaoOrdenacao;
+  } | null>(null);
 
   const produtoSelecionado = useMemo(() => {
     const id = Number(formulario.produto_id);
@@ -96,10 +112,21 @@ function Movimentacao() {
   }, [formulario.produto_id, produtos]);
 
   const estoqueDisponivel = Number(produtoSelecionado?.quantidade ?? 0);
+  const margemMinima = produtoSelecionado
+    ? margensCategorias[
+        normalizarCategoriaProduto(produtoSelecionado.tipo ?? "")
+      ]
+    : undefined;
   const quantidadeInformada = Number(formulario.quantidade || 0);
-  const precoInformado = Number(formulario.preco_unitario || 0);
+  const custoUnitario = Number(produtoSelecionado?.preco ?? 0);
+  const precoVendaMinimo =
+    margemMinima === undefined || custoUnitario <= 0
+      ? null
+      : Number(
+          (custoUnitario * (1 + margemMinima / 100)).toFixed(2),
+        );
   const valorTotalFormulario = Number(
-    (quantidadeInformada * precoInformado).toFixed(2),
+    (quantidadeInformada * custoUnitario).toFixed(2),
   );
 
   const produtosPorId = useMemo(() => {
@@ -138,13 +165,22 @@ function Movimentacao() {
   }, [movimentacoes]);
 
   const historicoFiltrado = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+    const termos = [busca, buscaGlobal]
+      .map((valor) => valor
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase(),
+      )
+      .filter(Boolean);
 
     return [...movimentacoes]
       .sort((a, b) => (b.data ?? "").localeCompare(a.data ?? ""))
       .filter((movimentacao) => {
         const produto = produtosPorId.get(movimentacao.produto_id);
         const texto = [
+          movimentacao.id,
+          movimentacao.produto_id,
           produto?.nome,
           produto?.tipo,
           movimentacao.descricao,
@@ -152,14 +188,45 @@ function Movimentacao() {
         ]
           .filter(Boolean)
           .join(" ")
-          .toLowerCase();
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
 
         return (
           (filtroTipo === "todos" || movimentacao.tipo === filtroTipo) &&
-          (!termo || texto.includes(termo))
+          termos.every((termo) => texto.includes(termo))
         );
       });
-  }, [busca, filtroTipo, movimentacoes, produtosPorId]);
+  }, [busca, buscaGlobal, filtroTipo, movimentacoes, produtosPorId]);
+
+  const historicoOrdenado = useMemo(() => {
+    if (!ordenacao) return historicoFiltrado;
+    return ordenarLista(
+      historicoFiltrado,
+      (movimentacao) => {
+        const produto = produtosPorId.get(movimentacao.produto_id);
+        switch (ordenacao.coluna) {
+          case "tipo": return movimentacao.tipo;
+          case "produto": return produto?.nome ?? movimentacao.produto?.nome ?? `Produto ${movimentacao.produto_id}`;
+          case "categoria": return produto?.tipo ?? "Não informada";
+          case "descricao": return movimentacao.descricao;
+          case "data": return new Date(movimentacao.data).getTime() || 0;
+          case "venda": return movimentacao.venda_id ?? 0;
+          case "quantidade": return Number(movimentacao.quantidade || 0);
+          case "unitario": return Number(movimentacao.preco_unitario || 0);
+          case "total": return Number(movimentacao.quantidade || 0) * Number(movimentacao.preco_unitario || 0);
+        }
+      },
+      ordenacao.direcao,
+    );
+  }, [historicoFiltrado, ordenacao, produtosPorId]);
+
+  function alternarOrdenacao(coluna: ColunaOrdenacaoMovimento) {
+    setOrdenacao((atual) => ({
+      coluna,
+      direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
+    }));
+  }
 
   const carregarDados = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -208,14 +275,10 @@ function Movimentacao() {
   }
 
   function selecionarProduto(valor: string) {
-    const produto = produtos.find((item) => item.id === Number(valor));
-
     setFormulario((atual) => ({
       ...atual,
       produto_id: valor,
-      preco_unitario: produto
-        ? String(Number(produto.preco.toFixed(2)))
-        : "",
+      preco_unitario: "",
     }));
 
     setMensagem(null);
@@ -233,10 +296,18 @@ function Movimentacao() {
 
     const produtoId = Number(formulario.produto_id);
     const quantidade = Number(formulario.quantidade);
-    const precoUnitario = Number(formulario.preco_unitario);
+    const custoUnitario = Number(produtoSelecionado?.preco ?? 0);
 
     if (!Number.isInteger(produtoId) || produtoId <= 0) {
       setMensagem({ tipo: "erro", texto: "Selecione um produto." });
+      return;
+    }
+
+    if (!produtoSelecionado) {
+      setMensagem({
+        tipo: "erro",
+        texto: "Produto não encontrado. Atualize a lista e tente novamente.",
+      });
       return;
     }
 
@@ -248,10 +319,10 @@ function Movimentacao() {
       return;
     }
 
-    if (!Number.isFinite(precoUnitario) || precoUnitario < 0) {
+    if (!Number.isFinite(custoUnitario) || custoUnitario < 0) {
       setMensagem({
         tipo: "erro",
-        texto: "Informe um preço unitário válido.",
+        texto: "Defina o preço de compra do produto na aba Produtos.",
       });
       return;
     }
@@ -260,13 +331,27 @@ function Movimentacao() {
       tipo: "entrada",
       produto_id: produtoId,
       quantidade,
-      preco_unitario: Number(precoUnitario.toFixed(2)),
+      preco_unitario: Number(custoUnitario.toFixed(2)),
       descricao: formulario.descricao.trim() || descricaoPadrao(),
     };
+
+    let precoAtualizado = false;
 
     try {
       setSalvando(true);
       setMensagem(null);
+
+      if (
+        produtoSelecionado &&
+        precoVendaMinimo !== null &&
+        precoVendaMinimo > produtoSelecionado.preco
+      ) {
+        await apiRequest(`/produtos/${produtoId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ preco: precoVendaMinimo }),
+        });
+        precoAtualizado = true;
+      }
 
       await apiRequest<MovimentacaoEstoque>("/fluxo-caixa", {
         method: "POST",
@@ -276,12 +361,19 @@ function Movimentacao() {
       setFormulario(formularioInicial);
       setMensagem({
         tipo: "sucesso",
-        texto: "Entrada de estoque registrada com sucesso.",
+        texto: precoAtualizado
+          ? `Entrada registrada. Preço de venda ajustado para ${formatarMoeda(precoVendaMinimo ?? 0)}.`
+          : "Entrada de estoque registrada com sucesso.",
       });
 
       await carregarDados();
     } catch (erro) {
-      setMensagem({ tipo: "erro", texto: descreverErro(erro) });
+      setMensagem({
+        tipo: "erro",
+        texto: precoAtualizado
+          ? `O preço de venda foi ajustado, mas não foi possível confirmar a entrada. Confira o estoque antes de repetir. ${descreverErro(erro)}`
+          : descreverErro(erro),
+      });
     } finally {
       setSalvando(false);
     }
@@ -295,7 +387,7 @@ function Movimentacao() {
           <div>
             <h1 className="medium-h1">Entrada de estoque</h1>
             <p className="light-h3">
-              Registre a compra de produtos que a loja adquiriu para revender.
+              Registre entradas e saídas do estoque.
             </p>
           </div>
         </div>
@@ -323,10 +415,10 @@ function Movimentacao() {
         <article className="fluxo-resumo-card fluxo-resumo-saida">
           <div className="fluxo-resumo-topo">
             <span className="fluxo-resumo-icone">−</span>
-            <span className="light-h3">Saídas por venda</span>
+            <span className="light-h3">Valor das saídas</span>
           </div>
           <strong className="bold-h2">{formatarMoeda(resumo.saidas)}</strong>
-          <small>{formatarNumero(resumo.unidadesSaida)} un. vendidas no atendimento</small>
+          <small>{formatarNumero(resumo.unidadesSaida)} un. baixadas</small>
         </article>
 
         <article className="fluxo-resumo-card">
@@ -344,7 +436,7 @@ function Movimentacao() {
           <div>
             <h2 className="medium-h2">Registrar entrada</h2>
             <p className="light-h3">
-              Selecione o produto comprado e informe quantidade e custo unitário.
+              Selecione o produto e informe quantidade e custo unitário.
             </p>
           </div>
         </div>
@@ -384,19 +476,14 @@ function Movimentacao() {
               />
             </label>
 
-            <label className="fluxo-campo">
-              <span className="medium-h3">Preço unitário</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={formulario.preco_unitario}
-                onChange={(evento) =>
-                  alterarCampo("preco_unitario", evento.target.value)
-                }
-                required
-              />
-            </label>
+            <div className="fluxo-campo">
+              <span className="medium-h3">Preço de compra</span>
+              <div className="fluxo-informacao fluxo-informacao-valor">
+                {produtoSelecionado
+                  ? formatarMoeda(produtoSelecionado.preco)
+                  : "Selecione um produto"}
+              </div>
+            </div>
 
             <div className="fluxo-campo">
               <span className="medium-h3">Estoque atual</span>
@@ -408,9 +495,27 @@ function Movimentacao() {
             </div>
 
             <div className="fluxo-campo">
-              <span className="medium-h3">Valor total da compra</span>
+              <span className="medium-h3">Valor total da entrada</span>
               <div className="fluxo-informacao fluxo-informacao-valor">
                 {formatarMoeda(valorTotalFormulario)}
+              </div>
+            </div>
+
+            <div className="fluxo-campo">
+              <span className="medium-h3">Margem mínima</span>
+              <div className="fluxo-informacao">
+                {margemMinima === undefined
+                  ? "Não definida em Produtos"
+                  : `${formatarNumero(margemMinima)}%`}
+              </div>
+            </div>
+
+            <div className="fluxo-campo">
+              <span className="medium-h3">Preço de venda mínimo</span>
+              <div className="fluxo-informacao fluxo-informacao-valor">
+                {precoVendaMinimo === null
+                  ? "Defina a margem em Produtos"
+                  : formatarMoeda(precoVendaMinimo)}
               </div>
             </div>
 
@@ -466,7 +571,7 @@ function Movimentacao() {
           <div>
             <h2 className="medium-h2">Histórico de movimentações</h2>
             <p className="light-h3">
-              Entradas registradas aqui e saídas geradas pelas vendas.
+              Histórico de entradas e saídas registradas no estoque.
             </p>
           </div>
 
@@ -486,8 +591,8 @@ function Movimentacao() {
               aria-label="Filtrar por tipo"
             >
               <option value="todos">Todas</option>
-              <option value="entrada">Entradas (compras)</option>
-              <option value="saida">Saídas (vendas)</option>
+              <option value="entrada">Entradas</option>
+              <option value="saida">Saídas</option>
             </select>
           </div>
         </div>
@@ -496,15 +601,15 @@ function Movimentacao() {
           <table className="fluxo-tabela">
             <thead>
               <tr>
-                <th>Movimentação</th>
-                <th>Produto</th>
-                <th>Categoria</th>
-                <th>Descrição</th>
-                <th>Data</th>
-                <th>Venda</th>
-                <th>Quantidade</th>
-                <th>Preço unitário</th>
-                <th>Valor total</th>
+                <SortableHeader label="Movimentação" active={ordenacao?.coluna === "tipo"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("tipo")} />
+                <SortableHeader label="Produto" active={ordenacao?.coluna === "produto"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("produto")} />
+                <SortableHeader label="Categoria" active={ordenacao?.coluna === "categoria"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("categoria")} />
+                <SortableHeader label="Descrição" active={ordenacao?.coluna === "descricao"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("descricao")} />
+                <SortableHeader label="Data" active={ordenacao?.coluna === "data"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("data")} />
+                <SortableHeader label="Venda" active={ordenacao?.coluna === "venda"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("venda")} />
+                <SortableHeader label="Quantidade" active={ordenacao?.coluna === "quantidade"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("quantidade")} />
+                <SortableHeader label="Preço unitário" active={ordenacao?.coluna === "unitario"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("unitario")} />
+                <SortableHeader label="Valor total" active={ordenacao?.coluna === "total"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("total")} />
               </tr>
             </thead>
 
@@ -515,14 +620,14 @@ function Movimentacao() {
                     Carregando dados...
                   </td>
                 </tr>
-              ) : historicoFiltrado.length === 0 ? (
+              ) : historicoOrdenado.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="fluxo-tabela-vazia">
                     Nenhuma movimentação encontrada.
                   </td>
                 </tr>
               ) : (
-                historicoFiltrado.map((movimentacao) => {
+                historicoOrdenado.map((movimentacao) => {
                   const produto = produtosPorId.get(movimentacao.produto_id);
                   const nome =
                     produto?.nome ??
@@ -537,11 +642,9 @@ function Movimentacao() {
                     <tr key={movimentacao.id}>
                       <td>
                         <span
-                          className={`fluxo-status fluxo-status-${movimentacao.tipo}`}
+                          className="fluxo-status"
                         >
-                          {movimentacao.tipo === "entrada"
-                            ? "Entrada (compra)"
-                            : "Saída (venda)"}
+                          {movimentacao.tipo === "entrada" ? "Entrada" : "Saída"}
                         </span>
                       </td>
                       <td>

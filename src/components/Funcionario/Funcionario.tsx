@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { Pencil, Search, Trash2 } from "lucide-react";
+import SortableHeader from "../SortableHeader/SortableHeader";
+import { ordenarLista } from "../../lib/ordenacao";
+import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 import "./Funcionario.css";
 
 import { API_BASE_URL } from "../../lib/api";
@@ -24,6 +28,8 @@ interface Cargo {
   id: number;
   nome: string;
 }
+
+type ColunaOrdenacaoFuncionario = "nome" | "cpf" | "nascimento" | "civil" | "contato" | "cargo";
 
 interface Aviso {
   tipo: "ok" | "erro";
@@ -123,11 +129,17 @@ function mensagemDeErro(e: unknown) {
 
 /* ---------- Componente ---------- */
 
-export default function Funcionario() {
+export default function Funcionario({ buscaGlobal }: { buscaGlobal: string }) {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [cargos, setCargos] = useState<Cargo[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroLista, setErroLista] = useState("");
+  const [busca, setBusca] = useState("");
+  const [cargoFiltro, setCargoFiltro] = useState("todos");
+  const [ordenacao, setOrdenacao] = useState<{
+    coluna: ColunaOrdenacaoFuncionario;
+    direcao: DirecaoOrdenacao;
+  } | null>(null);
 
   const [form, setForm] = useState<FormularioFuncionario>(formularioVazio);
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -175,7 +187,59 @@ export default function Funcionario() {
   }, [carregarDados]);
 
   function nomeDoCargo(id: number) {
-    return cargos.find((c) => c.id === id)?.nome ?? `Cargo ${id}`;
+    return cargos.find((cargo) => cargo.id === id)?.nome ?? `Cargo ${id}`;
+  }
+
+  const funcionariosFiltrados = funcionarios.filter((funcionario) => {
+    const termos = [busca, buscaGlobal]
+      .map((valor) => valor
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase())
+      .filter(Boolean);
+    const textoFuncionario = [
+      funcionario.id,
+      funcionario.nome,
+      funcionario.cpf,
+      funcionario.rg,
+      funcionario.contato,
+      nomeDoCargo(funcionario.cargo_id),
+    ]
+      .join(" ")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+    return (
+      termos.every((termo) => textoFuncionario.includes(termo)) &&
+      (cargoFiltro === "todos" || String(funcionario.cargo_id) === cargoFiltro)
+    );
+  });
+
+  const funcionariosOrdenados = useMemo(() => {
+    if (!ordenacao) return funcionariosFiltrados;
+    return ordenarLista(
+      funcionariosFiltrados,
+      (funcionario) => {
+        switch (ordenacao.coluna) {
+          case "nome": return funcionario.nome;
+          case "cpf": return funcionario.cpf;
+          case "nascimento": return funcionario.data_nasc;
+          case "civil": return funcionario.estado_civil;
+          case "contato": return funcionario.contato;
+          case "cargo": return cargos.find((cargo) => cargo.id === funcionario.cargo_id)?.nome ?? `Cargo ${funcionario.cargo_id}`;
+        }
+      },
+      ordenacao.direcao,
+    );
+  }, [funcionariosFiltrados, ordenacao, cargos]);
+
+  function alternarOrdenacao(coluna: ColunaOrdenacaoFuncionario) {
+    setOrdenacao((atual) => ({
+      coluna,
+      direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
+    }));
   }
 
   function alterarCampo(campo: keyof FormularioFuncionario) {
@@ -439,19 +503,45 @@ export default function Funcionario() {
       <div className="func-secao">
         <div className="func-titulo-linha">
           <h2 className="func-titulo">Funcionários cadastrados</h2>
-          <span className="func-contador">{funcionarios.length} item(ns)</span>
+          <span className="func-contador">
+            {funcionariosFiltrados.length} de {funcionarios.length} funcionário(s)
+          </span>
+        </div>
+
+        <div className="func-lista-controles">
+          <label className="func-busca">
+            <Search size={18} aria-hidden="true" />
+            <input
+              type="search"
+              value={busca}
+              onChange={(evento) => setBusca(evento.target.value)}
+              placeholder="Buscar por nome, CPF, contato ou cargo"
+              aria-label="Buscar funcionários"
+            />
+          </label>
+          <select
+            className="func-filtro-cargo"
+            value={cargoFiltro}
+            onChange={(evento) => setCargoFiltro(evento.target.value)}
+            aria-label="Filtrar funcionários por cargo"
+          >
+            <option value="todos">Todos os cargos</option>
+            {cargos.map((cargo) => (
+              <option key={cargo.id} value={cargo.id}>{cargo.nome}</option>
+            ))}
+          </select>
         </div>
 
         <div className="func-tabela-wrap">
           <table className="func-tabela">
             <thead>
               <tr>
-                <th>Nome</th>
-                <th>CPF</th>
-                <th>Nascimento</th>
-                <th>Estado civil</th>
-                <th>Contato</th>
-                <th>Cargo</th>
+                <SortableHeader label="Nome" active={ordenacao?.coluna === "nome"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("nome")} />
+                <SortableHeader label="CPF" active={ordenacao?.coluna === "cpf"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("cpf")} />
+                <SortableHeader label="Nascimento" active={ordenacao?.coluna === "nascimento"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("nascimento")} />
+                <SortableHeader label="Estado civil" active={ordenacao?.coluna === "civil"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("civil")} />
+                <SortableHeader label="Contato" active={ordenacao?.coluna === "contato"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("contato")} />
+                <SortableHeader label="Cargo" active={ordenacao?.coluna === "cargo"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("cargo")} />
                 <th className="func-col-acoes">Ações</th>
               </tr>
             </thead>
@@ -475,17 +565,19 @@ export default function Funcionario() {
                 </tr>
               )}
 
-              {!carregando && !erroLista && funcionarios.length === 0 && (
+              {!carregando && !erroLista && funcionariosFiltrados.length === 0 && (
                 <tr>
                   <td colSpan={7} className="func-vazio">
-                    Nenhum funcionário adicionado.
+                    {funcionarios.length === 0
+                      ? "Nenhum funcionário adicionado."
+                      : "Nenhum funcionário corresponde à busca ou ao cargo."}
                   </td>
                 </tr>
               )}
 
               {!carregando &&
                 !erroLista &&
-                funcionarios.map((f) => (
+                funcionariosOrdenados.map((f) => (
                   <tr key={f.id}>
                     <td>{f.nome}</td>
                     <td>{f.cpf}</td>
@@ -494,20 +586,27 @@ export default function Funcionario() {
                     <td>{f.contato}</td>
                     <td>{nomeDoCargo(f.cargo_id)}</td>
                     <td className="func-col-acoes">
-                      <button
-                        type="button"
-                        className="func-link"
-                        onClick={() => iniciarEdicao(f)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="func-link func-link-perigo"
-                        onClick={() => remover(f)}
-                      >
-                        Remover
-                      </button>
+                      <div className="func-acoes-linha">
+                        <button
+                          type="button"
+                          className="func-acao func-editar"
+                          onClick={() => iniciarEdicao(f)}
+                          aria-label={`Editar ${f.nome}`}
+                          title="Editar funcionário"
+                        >
+                          <Pencil size={16} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="func-acao func-excluir"
+                          onClick={() => void remover(f)}
+                          aria-label={`Excluir ${f.nome}`}
+                          title="Excluir funcionário"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -15,6 +15,17 @@ import Button from "../Button/Button";
 import "./Produtos.css";
 
 import { API_BASE_URL } from "../../lib/api";
+import {
+  CATEGORIAS_PRODUTOS,
+  lerMargensCategoriasProdutos,
+  normalizarCategoriaProduto,
+  obterCategoriaProduto,
+  removerMargemCategoriaProduto,
+  salvarMargemCategoriaProduto,
+} from "../../lib/margensProdutos";
+import SortableHeader from "../SortableHeader/SortableHeader";
+import { ordenarLista } from "../../lib/ordenacao";
+import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 
 interface IProduto {
   id: number;
@@ -32,6 +43,7 @@ type FormularioProduto = {
   codigo_barra: string;
   tipo: string;
   preco: string;
+  margem_minima: string;
 };
 
 type PayloadProduto = {
@@ -49,6 +61,9 @@ type Mensagem = {
   codigo?: string;
 };
 
+type FiltroEstoqueProduto = "todos" | "com-estoque" | "sem-estoque";
+type ColunaOrdenacaoProduto = "codigo" | "nome" | "categoria" | "descricao" | "margem" | "preco";
+
 type ApiErro = {
   message?: string | string[];
   error?: string;
@@ -64,16 +79,15 @@ const formularioInicial: FormularioProduto = {
   codigo_barra: "",
   tipo: "",
   preco: "",
+  margem_minima: "0",
 };
 
-function normalizarTexto(texto: string) {
-  return texto
+function normalizarTextoBusca(valor: unknown) {
+  return String(valor ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ");
+    .trim();
 }
 
 function normalizarProduto(
@@ -160,72 +174,19 @@ function normalizarProdutos(
 
 function obterPrefixoCategoria(
   categoria: string,
-  nome: string,
+  nome?: string,
 ) {
-  const texto = normalizarTexto(
-    `${categoria} ${nome}`,
-  );
+  const categoriaSelecionada =
+    obterCategoriaProduto(categoria) ??
+    CATEGORIAS_PRODUTOS.find(
+      (item) => item.valor === "outro",
+    );
 
-  if (
-    texto.includes("camisa") ||
-    texto.includes("camiseta") ||
-    texto.includes("polo")
-  ) {
-    return "110";
+  if (!categoriaSelecionada && nome) {
+    return "900";
   }
 
-  if (
-    texto.includes("calca") ||
-    texto.includes("bermuda") ||
-    texto.includes("short")
-  ) {
-    return "120";
-  }
-
-  if (
-    texto.includes("tenis") ||
-    texto.includes("sapato") ||
-    texto.includes("sandalia") ||
-    texto.includes("calcado") ||
-    texto.includes("bota")
-  ) {
-    return "130";
-  }
-
-  if (
-    texto.includes("bone") ||
-    texto.includes("chapeu") ||
-    texto.includes("cinto") ||
-    texto.includes("bolsa") ||
-    texto.includes("carteira") ||
-    texto.includes("acessorio")
-  ) {
-    return "140";
-  }
-
-  if (
-    texto.includes("vestido") ||
-    texto.includes("saia")
-  ) {
-    return "150";
-  }
-
-  if (
-    texto.includes("casaco") ||
-    texto.includes("jaqueta") ||
-    texto.includes("moletom")
-  ) {
-    return "160";
-  }
-
-  if (
-    texto.includes("roupa") ||
-    texto.includes("vestuario")
-  ) {
-    return "170";
-  }
-
-  return "900";
+  return categoriaSelecionada?.prefixo ?? "900";
 }
 
 function gerarDigitosAleatorios(
@@ -415,9 +376,98 @@ function avisarOutrasAbas() {
   );
 }
 
-function Produtos() {
+async function verificarVinculosProduto(
+  produtoId: number,
+): Promise<{
+  temVinculo: boolean;
+  motivo: string;
+}> {
+  try {
+    const [itensVendaResposta, fluxoResposta] =
+      await Promise.all([
+        fetch(`${API_URL}/itemvenda`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }),
+        fetch(`${API_URL}/fluxo-caixa`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }),
+      ]);
+
+    const itensVenda =
+      itensVendaResposta.ok
+        ? await lerResposta(itensVendaResposta)
+        : [];
+
+    const fluxoCaixa =
+      fluxoResposta.ok
+        ? await lerResposta(fluxoResposta)
+        : [];
+
+    const itensVinculados = Array.isArray(itensVenda)
+      ? itensVenda.some((item) => {
+          const itemVenda = item as Partial<{
+            produtos_id?: number;
+            produto_id?: number;
+          }>;
+
+          return (
+            Number(
+              itemVenda.produtos_id ??
+                itemVenda.produto_id,
+            ) === produtoId
+          );
+        })
+      : false;
+
+    const fluxoVinculado = Array.isArray(fluxoCaixa)
+      ? fluxoCaixa.some((item) => {
+          const movimento = item as Partial<{
+            produto_id?: number;
+            produtos_id?: number;
+          }>;
+
+          return (
+            Number(
+              movimento.produto_id ??
+                movimento.produtos_id,
+            ) === produtoId
+          );
+        })
+      : false;
+
+    if (itensVinculados || fluxoVinculado) {
+      return {
+        temVinculo: true,
+        motivo:
+          itensVinculados && fluxoVinculado
+            ? "itens de venda e movimentações de estoque/caixa"
+            : itensVinculados
+              ? "itens de venda"
+              : "movimentações de estoque/caixa",
+      };
+    }
+  } catch {
+    // A verificação de vínculos não deve bloquear a exclusão quando a API estiver indisponível;
+    // em caso de falha, a operação continua e a API responde com a mensagem real do backend.
+  }
+
+  return {
+    temVinculo: false,
+    motivo: "",
+  };
+}
+
+function Produtos({ buscaGlobal }: { buscaGlobal: string }) {
   const [produtos, setProdutos] =
     useState<IProduto[]>([]);
+  const [margensCategorias, setMargensCategorias] =
+    useState(lerMargensCategoriasProdutos);
 
   const [formulario, setFormulario] =
     useState<FormularioProduto>({
@@ -434,6 +484,13 @@ function Produtos() {
     useState(0);
 
   const [filtro, setFiltro] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
+  const [estoqueFiltro, setEstoqueFiltro] =
+    useState<FiltroEstoqueProduto>("todos");
+  const [ordenacao, setOrdenacao] = useState<{
+    coluna: ColunaOrdenacaoProduto;
+    direcao: DirecaoOrdenacao;
+  } | null>(null);
   const [carregando, setCarregando] =
     useState(true);
   const [salvando, setSalvando] =
@@ -572,34 +629,86 @@ function Produtos() {
   }, [buscarProdutos]);
 
   const produtosFiltrados = useMemo(() => {
-    const termo = filtro
-      .trim()
-      .toLowerCase();
+    const termo = normalizarTextoBusca(filtro);
+    const termoGlobal = normalizarTextoBusca(buscaGlobal);
 
-    if (!termo) {
-      return produtos;
-    }
-
-    return produtos.filter((produto) =>
-      [
+    return produtos.filter((produto) => {
+      const camposBusca = [
         produto.id,
         produto.nome,
         produto.descricao,
         produto.codigo_barra,
         produto.tipo,
         produto.preco,
-      ].some((campo) =>
-        String(campo ?? "")
-          .toLowerCase()
-          .includes(termo),
-      ),
+      ].map(normalizarTextoBusca);
+      const correspondeBusca =
+        (!termo || camposBusca.some((campo) => campo.includes(termo))) &&
+        (!termoGlobal || camposBusca.some((campo) => campo.includes(termoGlobal)));
+
+      const correspondeCategoria =
+        categoriaFiltro === "todas" ||
+        normalizarTextoBusca(produto.tipo) ===
+          normalizarTextoBusca(categoriaFiltro);
+
+      const temEstoque = Number(produto.quantidade || 0) > 0;
+      const correspondeEstoque =
+        estoqueFiltro === "todos" ||
+        (estoqueFiltro === "com-estoque" && temEstoque) ||
+        (estoqueFiltro === "sem-estoque" && !temEstoque);
+
+      return correspondeBusca && correspondeCategoria && correspondeEstoque;
+    });
+  }, [buscaGlobal, categoriaFiltro, estoqueFiltro, filtro, produtos]);
+
+  const categoriasDisponiveis = useMemo(
+    () =>
+      Array.from(new Set(produtos.map((produto) => produto.tipo.trim()).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [produtos],
+  );
+
+  const produtosOrdenados = useMemo(() => {
+    if (!ordenacao) return produtosFiltrados;
+    return ordenarLista(
+      produtosFiltrados,
+      (produto) => {
+        switch (ordenacao.coluna) {
+          case "codigo": return produto.codigo_barra ?? "";
+          case "nome": return produto.nome;
+          case "categoria": return produto.tipo;
+          case "descricao": return produto.descricao ?? "";
+          case "margem": return margensCategorias[normalizarCategoriaProduto(produto.tipo)] ?? -1;
+          case "preco": return Number(produto.preco || 0);
+        }
+      },
+      ordenacao.direcao,
     );
-  }, [filtro, produtos]);
+  }, [margensCategorias, ordenacao, produtosFiltrados]);
+
+  function alternarOrdenacao(coluna: ColunaOrdenacaoProduto) {
+    setOrdenacao((atual) => ({
+      coluna,
+      direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
+    }));
+  }
 
   function alterarCampo(
     campo: keyof FormularioProduto,
     valor: string,
   ) {
+    if (campo === "tipo") {
+      const categoria = obterCategoriaProduto(valor);
+      setFormulario((atual) => ({
+        ...atual,
+        tipo: valor,
+        margem_minima: String(
+          categoria?.margemBase ?? atual.margem_minima ?? 0,
+        ),
+      }));
+      setMensagem(null);
+      return;
+    }
+
     setFormulario((atual) => ({
       ...atual,
       [campo]: valor,
@@ -628,6 +737,11 @@ function Produtos() {
       codigo_barra:
         produto.codigo_barra ?? "",
       tipo: produto.tipo ?? "",
+      margem_minima: String(
+        margensCategorias[
+          normalizarCategoriaProduto(produto.tipo ?? "")
+        ] ?? 0,
+      ),
       preco: String(
         Number(
           produto.preco ?? 0,
@@ -693,6 +807,31 @@ function Produtos() {
           "Informe um preço maior que zero.",
         ),
         { codigo: "PROD-E005" },
+      );
+    }
+
+    const categoriaSelecionada =
+      obterCategoriaProduto(formulario.tipo) ??
+      CATEGORIAS_PRODUTOS.find(
+        (item) => item.valor === "outro",
+      );
+
+    const margemMinima = categoriaSelecionada
+      ? categoriaSelecionada.margemBase
+      : Number(
+          formulario.margem_minima.replace(",", "."),
+        );
+
+    if (
+      !Number.isFinite(margemMinima) ||
+      margemMinima < 0 ||
+      margemMinima > 500
+    ) {
+      throw Object.assign(
+        new Error(
+          "Informe uma margem mínima entre 0% e 500%.",
+        ),
+        { codigo: "PROD-E007" },
       );
     }
 
@@ -781,11 +920,36 @@ function Produtos() {
       console.log("Payload:", payload);
       console.groupEnd();
 
-      await enviarProduto(
+      const respostaSalvamento = await enviarProduto(
         editando ? "PATCH" : "POST",
         url,
         payload,
       );
+
+      const produtoSalvo = normalizarProduto(
+        respostaSalvamento,
+      );
+
+      if (produtoSalvo) {
+        const categoriaSelecionada =
+          obterCategoriaProduto(formulario.tipo) ??
+          CATEGORIAS_PRODUTOS.find(
+            (item) => item.valor === "outro",
+          );
+
+        const margemCategoria = categoriaSelecionada
+          ? categoriaSelecionada.margemBase
+          : Number(
+              formulario.margem_minima.replace(",", "."),
+            );
+
+        setMargensCategorias(
+          salvarMargemCategoriaProduto(
+            formulario.tipo,
+            margemCategoria,
+          ),
+        );
+      }
 
       limparFormulario();
       await buscarProdutos();
@@ -863,6 +1027,20 @@ function Produtos() {
       setProdutoEmExclusao(produto.id);
       setMensagem(null);
 
+      const vinculos = await verificarVinculosProduto(
+        produto.id,
+      );
+
+      if (vinculos.temVinculo) {
+        mostrarMensagem({
+          tipo: "erro",
+          codigo: "PROD-E010",
+          texto:
+            `Não foi possível excluir "${produto.nome}" porque ele está vinculado a ${vinculos.motivo}. Remova os registros relacionados antes de tentar novamente.`,
+        });
+        return;
+      }
+
       const resposta = await fetch(
         `${API_PRODUTOS}/${produto.id}`,
         {
@@ -888,6 +1066,10 @@ function Produtos() {
         limparFormulario();
       }
 
+      setMargensCategorias(
+        removerMargemCategoriaProduto(produto.tipo),
+      );
+
       await buscarProdutos();
       avisarOutrasAbas();
 
@@ -903,6 +1085,11 @@ function Produtos() {
         erro,
       );
 
+      const mensagemErro =
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível excluir o produto.";
+
       if (erro instanceof TypeError) {
         mostrarMensagem({
           tipo: "erro",
@@ -914,25 +1101,29 @@ function Produtos() {
         erro instanceof Error &&
         "codigo" in erro
       ) {
+        const codigo = String(
+          (
+            erro as Error & {
+              codigo: string;
+            }
+          ).codigo,
+        );
+
+        const texto =
+          codigo === "PROD-A500"
+            ? `${mensagemErro}. Isso normalmente acontece quando o produto já está associado a vendas ou movimentações e o backend não permite a remoção por integridade.`
+            : mensagemErro;
+
         mostrarMensagem({
           tipo: "erro",
-          codigo: String(
-            (
-              erro as Error & {
-                codigo: string;
-              }
-            ).codigo,
-          ),
-          texto: erro.message,
+          codigo,
+          texto,
         });
       } else {
         mostrarMensagem({
           tipo: "erro",
           codigo: "PROD-U001",
-          texto:
-            erro instanceof Error
-              ? erro.message
-              : "Não foi possível excluir o produto.",
+          texto: mensagemErro,
         });
       }
     } finally {
@@ -1028,7 +1219,7 @@ function Produtos() {
               Categoria
             </label>
 
-            <input
+            <select
               id="produto-categoria"
               value={formulario.tipo}
               onChange={(evento) =>
@@ -1037,8 +1228,19 @@ function Produtos() {
                   evento.target.value,
                 )
               }
-              placeholder="Ex.: Vestuário"
-            />
+            >
+              <option value="">
+                Selecione uma categoria
+              </option>
+              {CATEGORIAS_PRODUTOS.map((categoria) => (
+                <option
+                  key={categoria.valor}
+                  value={categoria.valor}
+                >
+                  {categoria.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="produto-campo">
@@ -1046,7 +1248,7 @@ function Produtos() {
               className="medium-h3"
               htmlFor="produto-preco"
             >
-              Preço de venda
+              Preço de compra
             </label>
 
             <div className="produto-campo-moeda">
@@ -1067,6 +1269,43 @@ function Produtos() {
                 placeholder="0,00"
               />
             </div>
+
+            <small
+              id="produto-preco-ajuda"
+              className="produto-codigo-ajuda"
+            >
+              Esse valor é o custo do produto e será usado para calcular o preço mínimo de venda pela categoria.
+            </small>
+          </div>
+
+          <div className="produto-campo">
+            <label
+              className="medium-h3"
+              htmlFor="produto-margem-minima"
+            >
+              Margem mínima da categoria
+            </label>
+
+            <div className="produto-campo-percentual">
+              <input
+                id="produto-margem-minima"
+                type="number"
+                min="0"
+                max="500"
+                step="0.1"
+                value={formulario.margem_minima}
+                readOnly
+                aria-describedby="produto-margem-ajuda"
+              />
+              <span>%</span>
+            </div>
+
+            <small
+              id="produto-margem-ajuda"
+              className="produto-codigo-ajuda"
+            >
+              A margem é definida pela categoria escolhida e aplicada ao custo de compra para calcular o preço mínimo de venda.
+            </small>
           </div>
 
           <div className="produto-campo produto-campo-descricao">
@@ -1171,25 +1410,50 @@ function Produtos() {
             <p className="light-h3">
               {carregando
                 ? "Carregando catálogo..."
-                : `${produtosFiltrados.length} produto(s) encontrado(s)`}
+                : `${produtosFiltrados.length} de ${produtos.length} produto(s)`}
             </p>
           </div>
 
-          <div className="produtos-filtro">
-            <Search
-              className="produtos-filtro-icone"
-              size={18}
-            />
+          <div className="produtos-filtros">
+            <div className="produtos-filtro">
+              <Search
+                className="produtos-filtro-icone"
+                size={18}
+              />
 
-            <input
-              type="search"
-              value={filtro}
+              <input
+                type="search"
+                value={filtro}
+                onChange={(evento) => setFiltro(evento.target.value)}
+                placeholder="Nome, código ou descrição"
+                aria-label="Pesquisar produtos por nome, código, categoria ou descrição"
+              />
+            </div>
+
+            <select
+              className="produtos-filtro-select"
+              value={categoriaFiltro}
+              onChange={(evento) => setCategoriaFiltro(evento.target.value)}
+              aria-label="Filtrar produtos por categoria"
+            >
+              <option value="todas">Todas as categorias</option>
+              {categoriasDisponiveis.map((categoria) => (
+                <option key={categoria} value={categoria}>{categoria}</option>
+              ))}
+            </select>
+
+            <select
+              className="produtos-filtro-select"
+              value={estoqueFiltro}
               onChange={(evento) =>
-                setFiltro(evento.target.value)
+                setEstoqueFiltro(evento.target.value as FiltroEstoqueProduto)
               }
-              placeholder="Pesquisar no catálogo"
-              aria-label="Pesquisar produtos"
-            />
+              aria-label="Filtrar produtos por estoque"
+            >
+              <option value="todos">Qualquer estoque</option>
+              <option value="com-estoque">Com estoque</option>
+              <option value="sem-estoque">Sem estoque</option>
+            </select>
           </div>
         </div>
 
@@ -1197,21 +1461,12 @@ function Produtos() {
           <table className="produtos-tabela">
             <thead>
               <tr>
-                <th className="medium-h3">
-                  Código interno
-                </th>
-                <th className="medium-h3">
-                  Produto
-                </th>
-                <th className="medium-h3">
-                  Categoria
-                </th>
-                <th className="medium-h3">
-                  Descrição
-                </th>
-                <th className="medium-h3">
-                  Preço de venda
-                </th>
+                <SortableHeader label="Código interno" active={ordenacao?.coluna === "codigo"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("codigo")} />
+                <SortableHeader label="Produto" active={ordenacao?.coluna === "nome"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("nome")} />
+                <SortableHeader label="Categoria" active={ordenacao?.coluna === "categoria"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("categoria")} />
+                <SortableHeader label="Descrição" active={ordenacao?.coluna === "descricao"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("descricao")} />
+                <SortableHeader label="Margem mínima" active={ordenacao?.coluna === "margem"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("margem")} />
+                <SortableHeader label="Preço de venda" active={ordenacao?.coluna === "preco"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("preco")} />
                 <th className="produtos-coluna-acoes medium-h3">
                   Ações
                 </th>
@@ -1219,10 +1474,10 @@ function Produtos() {
             </thead>
 
             <tbody>
-              {produtosFiltrados.length === 0 ? (
+              {produtosOrdenados.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="produtos-sem-resultados"
                   >
                     {carregando
@@ -1231,7 +1486,7 @@ function Produtos() {
                   </td>
                 </tr>
               ) : (
-                produtosFiltrados.map(
+                produtosOrdenados.map(
                   (produto) => (
                     <tr
                       key={produto.id}
@@ -1263,6 +1518,14 @@ function Produtos() {
                       >
                         {produto.descricao ||
                           "Sem descrição"}
+                      </td>
+
+                      <td className="light-h3">
+                        {margensCategorias[
+                          normalizarCategoriaProduto(produto.tipo)
+                        ] === undefined
+                          ? "Não definida"
+                          : `${margensCategorias[normalizarCategoriaProduto(produto.tipo)]}%`}
                       </td>
 
                       <td className="medium-h3">

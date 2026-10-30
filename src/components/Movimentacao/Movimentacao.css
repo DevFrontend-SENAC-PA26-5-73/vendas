@@ -329,19 +329,8 @@
   border: 1px solid var(--c);
   border-radius: 999px;
   color: var(--b);
-  background-color: var(--c);
+  background-color: #f0f1f3;
   font-size: 11px;
-}
-
-.fluxo-status-entrada {
-  background-color: rgb(198 255 0 / 18%);
-  border-color: var(--primaria);
-}
-
-.fluxo-status-saida {
-  color: #9f2836;
-  background-color: #ffe7ea;
-  border-color: #f0b5bc;
 }
 
 .fluxo-produto {

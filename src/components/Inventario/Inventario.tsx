@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Boxes,
   PackageSearch,
+  PackageX,
   RefreshCw,
   Search,
   Warehouse,
@@ -18,10 +19,14 @@ import {
 import "./Inventario.css";
 
 import { API_BASE_URL } from "../../lib/api";
+import SortableHeader from "../SortableHeader/SortableHeader";
+import { ordenarLista } from "../../lib/ordenacao";
+import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 
 const API = {
   produtos: `${API_BASE_URL}/produtos`,
   estoque: `${API_BASE_URL}/estoque`,
+  fluxoCaixa: `${API_BASE_URL}/fluxo-caixa`,
 };
 
 type ProdutoApi = {
@@ -58,8 +63,12 @@ type FiltroSituacao =
   | "baixo"
   | "sem-estoque";
 
+type ColunaOrdenacaoInventario =
+  | "codigo" | "nome" | "categoria" | "descricao" | "quantidade"
+  | "preco" | "valor" | "situacao";
+
 type Mensagem = {
-  tipo: "erro" | "info";
+  tipo: "erro" | "info" | "sucesso";
   codigo: string;
   texto: string;
 };
@@ -166,13 +175,18 @@ function diagnosticarErro(erro: unknown): Mensagem {
   };
 }
 
-function Inventario() {
+function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
   const [itens, setItens] = useState<ItemInventario[]>([]);
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("todas");
   const [situacao, setSituacao] =
     useState<FiltroSituacao>("todos");
   const [carregando, setCarregando] = useState(true);
+  const [zerandoProdutoId, setZerandoProdutoId] = useState<number | null>(null);
+  const [ordenacao, setOrdenacao] = useState<{
+    coluna: ColunaOrdenacaoInventario;
+    direcao: DirecaoOrdenacao;
+  } | null>(null);
   const [mensagem, setMensagem] =
     useState<Mensagem | null>(null);
 
@@ -285,6 +299,40 @@ function Inventario() {
     void carregarInventario();
   }
 
+  async function zerarEstoque(item: ItemInventario) {
+    if (item.quantidade <= 0 || zerandoProdutoId !== null) return;
+
+    const confirmado = window.confirm(
+      `Registrar a saída de ${formatarNumero(item.quantidade)} unidade(s) de "${item.nome}" e zerar o estoque? O produto continuará no catálogo para preservar o histórico.`,
+    );
+    if (!confirmado) return;
+
+    setZerandoProdutoId(item.id);
+    setMensagem(null);
+
+    try {
+      await axios.post(API.fluxoCaixa, {
+        tipo: "saida",
+        produto_id: item.id,
+        quantidade: item.quantidade,
+        preco_unitario: Number(item.preco || 0),
+        descricao: "Ajuste negativo realizado pelo inventário",
+      });
+
+      await carregarInventario();
+      setMensagem({
+        tipo: "sucesso",
+        codigo: "INV-S001",
+        texto: `O estoque de "${item.nome}" foi zerado. O produto continua cadastrado no catálogo.`,
+      });
+      window.dispatchEvent(new CustomEvent("estoque-atualizado"));
+    } catch (erro) {
+      exibirErro(diagnosticarErro(erro));
+    } finally {
+      setZerandoProdutoId(null);
+    }
+  }
+
   const categorias = useMemo(() => {
     return Array.from(
       new Set(
@@ -327,21 +375,30 @@ function Inventario() {
   }, [itens]);
 
   const itensFiltrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+    const termos = [busca, buscaGlobal]
+      .map((valor) => valor
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase(),
+      )
+      .filter(Boolean);
 
     return itens.filter((item) => {
-      const correspondeBusca =
-        !termo ||
-        [
+      const camposBusca = [
           item.nome,
           item.codigoBarra,
           item.tipo,
           item.descricao,
-        ].some((valor) =>
-          String(valor ?? "")
-            .toLowerCase()
-            .includes(termo),
+        ]
+        .map((valor) => String(valor ?? "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase(),
         );
+      const correspondeBusca = termos.every((termo) =>
+        camposBusca.some((campo) => campo.includes(termo)),
+      );
 
       const correspondeCategoria =
         categoria === "todas" || item.tipo === categoria;
@@ -365,7 +422,34 @@ function Inventario() {
         correspondeSituacao
       );
     });
-  }, [itens, busca, categoria, situacao]);
+  }, [itens, busca, buscaGlobal, categoria, situacao]);
+
+  const itensOrdenados = useMemo(() => {
+    if (!ordenacao) return itensFiltrados;
+    return ordenarLista(
+      itensFiltrados,
+      (item) => {
+        switch (ordenacao.coluna) {
+          case "codigo": return item.codigoBarra;
+          case "nome": return item.nome;
+          case "categoria": return item.tipo;
+          case "descricao": return item.descricao;
+          case "quantidade": return item.quantidade;
+          case "preco": return item.preco;
+          case "valor": return item.quantidade * item.preco;
+          case "situacao": return item.quantidade === 0 ? 0 : item.quantidade <= LIMITE_ESTOQUE_BAIXO ? 1 : 2;
+        }
+      },
+      ordenacao.direcao,
+    );
+  }, [itensFiltrados, ordenacao]);
+
+  function alternarOrdenacao(coluna: ColunaOrdenacaoInventario) {
+    setOrdenacao((atual) => ({
+      coluna,
+      direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
+    }));
+  }
 
   return (
     <section className="inventario">
@@ -408,8 +492,8 @@ function Inventario() {
 
       {mensagem && (
         <div
-          className="inventario-mensagem inventario-mensagem-erro"
-          role="alert"
+          className={`inventario-mensagem inventario-mensagem-${mensagem.tipo}`}
+          role={mensagem.tipo === "erro" ? "alert" : "status"}
         >
           <strong>{mensagem.codigo}: </strong>
           {mensagem.texto}
@@ -501,14 +585,9 @@ function Inventario() {
             </h2>
 
             <p className="light-h3">
-              Tela somente para consulta. As quantidades
-              devem ser alteradas pela área de movimentação.
+              Consulte os saldos e zere o estoque de produtos descontinuados. O cadastro e o histórico de vendas serão preservados.
             </p>
           </div>
-
-          <span className="inventario-somente-leitura medium-h3">
-            Somente leitura
-          </span>
         </div>
 
         <div className="inventario-filtros">
@@ -576,14 +655,15 @@ function Inventario() {
           <table className="inventario-tabela">
             <thead>
               <tr>
-                <th>Código</th>
-                <th>Produto</th>
-                <th>Categoria</th>
-                <th>Descrição</th>
-                <th>Quantidade</th>
-                <th>Preço unitário</th>
-                <th>Valor em estoque</th>
-                <th>Situação</th>
+                <SortableHeader label="Código" active={ordenacao?.coluna === "codigo"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("codigo")} />
+                <SortableHeader label="Produto" active={ordenacao?.coluna === "nome"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("nome")} />
+                <SortableHeader label="Categoria" active={ordenacao?.coluna === "categoria"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("categoria")} />
+                <SortableHeader label="Descrição" active={ordenacao?.coluna === "descricao"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("descricao")} />
+                <SortableHeader label="Quantidade" active={ordenacao?.coluna === "quantidade"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("quantidade")} />
+                <SortableHeader label="Preço unitário" active={ordenacao?.coluna === "preco"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("preco")} />
+                <SortableHeader label="Valor em estoque" active={ordenacao?.coluna === "valor"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("valor")} />
+                <SortableHeader label="Situação" active={ordenacao?.coluna === "situacao"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("situacao")} />
+                <th>Ações</th>
               </tr>
             </thead>
 
@@ -591,23 +671,23 @@ function Inventario() {
               {carregando ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="inventario-sem-resultados"
                   >
                     Carregando inventário...
                   </td>
                 </tr>
-              ) : itensFiltrados.length === 0 ? (
+              ) : itensOrdenados.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="inventario-sem-resultados"
                   >
                     Nenhum produto encontrado.
                   </td>
                 </tr>
               ) : (
-                itensFiltrados.map((item) => {
+                itensOrdenados.map((item) => {
                   let situacaoItem = "Normal";
                   let classeSituacao =
                     "inventario-status-normal";
@@ -669,6 +749,25 @@ function Inventario() {
                         >
                           {situacaoItem}
                         </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="inventario-zerar"
+                          onClick={() => void zerarEstoque(item)}
+                          disabled={item.quantidade <= 0 || zerandoProdutoId !== null}
+                          aria-label={`Zerar estoque de ${item.nome}`}
+                          title={
+                            item.quantidade <= 0
+                              ? "Produto já está sem estoque"
+                              : "Registrar saída e zerar estoque"
+                          }
+                        >
+                          <PackageX size={15} />
+                          {zerandoProdutoId === item.id
+                            ? "Zerando..."
+                            : "Zerar estoque"}
+                        </button>
                       </td>
                     </tr>
                   );

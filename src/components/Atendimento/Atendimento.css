@@ -316,6 +316,11 @@
   cursor: not-allowed;
 }
 
+.atendimento-acao-bloqueada {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
 /* ========================================
    TABELA DE ITENS
 ======================================== */

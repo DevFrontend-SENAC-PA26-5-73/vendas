@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, API_BASE_URL, descreverErro } from "../../lib/api";
+import SortableHeader from "../SortableHeader/SortableHeader";
+import { ordenarLista } from "../../lib/ordenacao";
+import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 import "./Atendimento.css";
 import Button from "../Button/Button";
 
@@ -39,6 +42,8 @@ type ItemPedido = {
   precoUnitario: number;
   subtotal: number;
 };
+
+type ColunaOrdenacaoItemPedido = "produto" | "codigo" | "quantidade" | "preco" | "subtotal";
 const API_CLIENTES_URL = "/clientes";
 const API_FUNCIONARIOS_URL = "/funcionarios";
 const API_TRANSPORTADORAS_URL = "/transportadoras";
@@ -46,6 +51,31 @@ const API_PRODUTOS_URL = "/produtos";
 const API_VENDAS_URL = "/vendas";
 const API_ITENS_VENDA_URL = "/itemvenda";
 const API_PAGAMENTOS_URL = "/pagamentos";
+const CHAVE_FALHA_FECHAMENTO = "vendas:atendimento:falha-fechamento";
+
+function lerFalhaFechamentoSalva() {
+  try {
+    return sessionStorage.getItem(CHAVE_FALHA_FECHAMENTO) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function salvarFalhaFechamento(texto: string) {
+  try {
+    sessionStorage.setItem(CHAVE_FALHA_FECHAMENTO, texto);
+  } catch {
+    return;
+  }
+}
+
+function limparFalhaFechamentoSalva() {
+  try {
+    sessionStorage.removeItem(CHAVE_FALHA_FECHAMENTO);
+  } catch {
+    return;
+  }
+}
 
 function hojeISO() {
   const agora = new Date();
@@ -320,16 +350,30 @@ function paraValorMonetario(valor: string): number {
   return Number.isFinite(numero) && numero > 0 ? numero : 0;
 }
 
-function Atendimento() {
+function normalizarBusca(valor: unknown) {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
   const [clientesCadastrados, setClientesCadastrados] = useState<Cliente[]>([]);
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState("");
+  const [buscaCliente, setBuscaCliente] = useState("");
   const [funcionariosCadastrados, setFuncionariosCadastrados] = useState<Funcionario[]>([]);
   const [transportadorasCadastradas, setTransportadorasCadastradas] = useState<Transportadora[]>([]);
   const [produtosCadastrados, setProdutosCadastrados] = useState<Produto[]>([]);
   const [carregandoProdutos, setCarregandoProdutos] = useState(true);
   const [produtoSelecionadoId, setProdutoSelecionadoId] = useState("");
+  const [buscaProduto, setBuscaProduto] = useState("");
   const [quantidade, setQuantidade] = useState(1);
   const [itensPedido, setItensPedido] = useState<ItemPedido[]>([]);
+    const [ordenacaoItens, setOrdenacaoItens] = useState<{
+      coluna: ColunaOrdenacaoItemPedido;
+      direcao: DirecaoOrdenacao;
+    } | null>(null);
   const [desconto, setDesconto] = useState(0);
   const [frete, setFrete] = useState(0);
   const [formaPagamento, setFormaPagamento] = useState("");
@@ -343,6 +387,9 @@ function Atendimento() {
   const [salvando, setSalvando] = useState(false);
   const [proximoPedidoId, setProximoPedidoId] = useState<number | null>(null);
   const [erroCarregamento, setErroCarregamento] = useState("");
+  const [falhaFechamento, setFalhaFechamento] = useState(
+    lerFalhaFechamentoSalva,
+  );
   const proximoItemId = useRef(1);
 
   /**
@@ -429,12 +476,61 @@ function Atendimento() {
   const produtoSelecionado = produtosCadastrados.find(
     (produto) => produto.id === Number(produtoSelecionadoId)
   );
+  const clientesParaSelecionar = useMemo(() => {
+    const termo = normalizarBusca(buscaCliente);
+    const termoGlobal = normalizarBusca(buscaGlobal);
+    return clientesCadastrados.filter((cliente) =>
+      cliente.id === Number(clienteSelecionadoId) ||
+      ((!termo || normalizarBusca(
+          `${cliente.id} ${cliente.nome} ${cliente.cpf} ${cliente.contato} ${cliente.email}`,
+        ).includes(termo)) &&
+        (!termoGlobal || normalizarBusca(
+          `${cliente.id} ${cliente.nome} ${cliente.cpf} ${cliente.contato} ${cliente.email}`,
+        ).includes(termoGlobal))),
+    );
+  }, [buscaGlobal, buscaCliente, clienteSelecionadoId, clientesCadastrados]);
+  const produtosParaSelecionar = useMemo(() => {
+    const termo = normalizarBusca(buscaProduto);
+    const termoGlobal = normalizarBusca(buscaGlobal);
+    return produtosCadastrados.filter((produto) =>
+      produto.id === Number(produtoSelecionadoId) ||
+      ((!termo || normalizarBusca(
+          `${produto.id} ${produto.nome} ${produto.codigo} ${produto.estoque ?? ""}`,
+        ).includes(termo)) &&
+        (!termoGlobal || normalizarBusca(
+          `${produto.id} ${produto.nome} ${produto.codigo} ${produto.estoque ?? ""}`,
+        ).includes(termoGlobal))),
+    );
+  }, [buscaGlobal, buscaProduto, produtoSelecionadoId, produtosCadastrados]);
   const estoqueSelecionado = produtoSelecionado?.estoque ?? null;
   const subtotalProduto = (produtoSelecionado?.preco ?? 0) * quantidade;
   const subtotalPedido = useMemo(
     () => itensPedido.reduce((total, item) => total + item.subtotal, 0),
     [itensPedido]
   );
+  const itensPedidoOrdenados = useMemo(() => {
+    if (!ordenacaoItens) return itensPedido;
+    return ordenarLista(
+      itensPedido,
+      (item) => {
+        switch (ordenacaoItens.coluna) {
+          case "produto": return item.nome;
+          case "codigo": return item.codigo;
+          case "quantidade": return item.quantidade;
+          case "preco": return item.precoUnitario;
+          case "subtotal": return item.subtotal;
+        }
+      },
+      ordenacaoItens.direcao,
+    );
+  }, [itensPedido, ordenacaoItens]);
+
+  function alternarOrdenacaoItens(coluna: ColunaOrdenacaoItemPedido) {
+    setOrdenacaoItens((atual) => ({
+      coluna,
+      direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
+    }));
+  }
   const totalPedido = Math.max(subtotalPedido - desconto + frete, 0);
   const valoresParcelas = useMemo(
     () => dividirEmParcelas(totalPedido, parcelas),
@@ -524,6 +620,10 @@ function Atendimento() {
   }
 
   async function finalizarPedido() {
+    if (salvando || falhaFechamento) {
+      return;
+    }
+
     if (!clienteSelecionado) {
       alert("Selecione um cliente.");
       return;
@@ -582,10 +682,14 @@ function Atendimento() {
       }
     }
 
+    let envioIniciado = false;
+    let vendaCriadaId: number | null = null;
+
     try {
       setSalvando(true);
       setErroCarregamento("");
 
+      envioIniciado = true;
       const respostaVenda = await apiRequest<unknown>(API_VENDAS_URL, {
         method: "POST",
         body: JSON.stringify({
@@ -605,6 +709,7 @@ function Atendimento() {
           "A API não retornou o ID da venda. Verifique a resposta do endpoint /vendas.",
         );
       }
+      vendaCriadaId = vendaId;
 
       // Registra cada produto do pedido e a saída correspondente no estoque
       for (const item of itensPedido) {
@@ -675,13 +780,24 @@ function Atendimento() {
       });
 
       setProximoPedidoId(vendaId + 1);
+      setFalhaFechamento("");
+      limparFalhaFechamentoSalva();
       limparAtendimento();
       void carregarCadastros();
     } catch (erro: unknown) {
       console.error("Erro ao registrar venda, itens ou pagamento:", erro);
-      alert(
-        `${descreverErro(erro)}\n\nSe o pedido foi criado, alguma parcela pode não ter sido gravada. Confira em Pagamentos antes de repetir.`,
-      );
+
+      if (envioIniciado) {
+        const identificacao = vendaCriadaId
+          ? `A venda #${vendaCriadaId} foi criada, mas uma etapa posterior falhou.`
+          : "Não foi possível confirmar se a API criou a venda.";
+
+        const aviso = `${identificacao} ${descreverErro(erro)} Consulte a venda, os itens, o estoque e os pagamentos na API antes de liberar um novo pedido. Não reenvie esta operação.`;
+        setFalhaFechamento(aviso);
+        salvarFalhaFechamento(aviso);
+      } else {
+        alert(descreverErro(erro));
+      }
     } finally {
       setSalvando(false);
     }
@@ -710,6 +826,32 @@ function Atendimento() {
               onClick={tentarNovamente}
             >
               Tentar novamente
+            </button>
+          </div>
+        )}
+
+        {falhaFechamento && (
+          <div className="atendimento-aviso atendimento-aviso-erro" role="alert">
+            <div>
+              <strong className="medium-h3">Fechamento interrompido</strong>
+              <small>{falhaFechamento}</small>
+            </div>
+            <button
+              type="button"
+              className="atendimento-aviso-acao"
+              onClick={() => {
+                const confirmou = window.confirm(
+                  "Só libere um novo pedido depois de conferir e reconciliar a venda anterior na API. Deseja continuar?",
+                );
+
+                if (confirmou) {
+                  limparAtendimento();
+                  setFalhaFechamento("");
+                  limparFalhaFechamentoSalva();
+                }
+              }}
+            >
+              Já conferi; novo pedido
             </button>
           </div>
         )}
@@ -770,9 +912,18 @@ function Atendimento() {
           <div className="atendimento-grid atendimento-grid-cliente">
             <div className="atendimento-campo">
               <label className="medium-h3" htmlFor="cliente">Selecionar cliente</label>
+              <input
+                id="buscar-cliente"
+                type="search"
+                value={buscaCliente}
+                onChange={(evento) => setBuscaCliente(evento.target.value)}
+                placeholder="Buscar por nome, CPF, telefone ou e-mail"
+                aria-label="Buscar cliente"
+              />
               <select id="cliente" value={clienteSelecionadoId} onChange={(evento) => setClienteSelecionadoId(evento.target.value)}>
                 <option value="">Selecione um cliente</option>
-                {clientesCadastrados.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>)}
+                {clientesParaSelecionar.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome} — {cliente.cpf}</option>)}
+                {clientesParaSelecionar.length === 0 && <option disabled>Nenhum cliente encontrado</option>}
               </select>
             </div>
             <div className="atendimento-campo">
@@ -795,14 +946,24 @@ function Atendimento() {
           <div className="atendimento-produto">
             <div className="atendimento-campo">
               <label className="medium-h3" htmlFor="produto">Produto</label>
+              <input
+                id="buscar-produto"
+                type="search"
+                value={buscaProduto}
+                onChange={(evento) => setBuscaProduto(evento.target.value)}
+                placeholder="Buscar por produto ou código"
+                aria-label="Buscar produto"
+                disabled={carregandoProdutos}
+              />
               <select id="produto" value={produtoSelecionadoId} onChange={(evento) => setProdutoSelecionadoId(evento.target.value)} disabled={carregandoProdutos}>
                 <option value="">{carregandoProdutos ? "Carregando produtos..." : produtosCadastrados.length === 0 ? "Nenhum produto cadastrado na API" : "Selecione um produto"}</option>
-                {produtosCadastrados.map((produto) => (
+                {produtosParaSelecionar.map((produto) => (
                   <option key={produto.id} value={produto.id} disabled={produto.estoque !== null && produto.estoque <= 0}>
                     {produto.nome} — {formatarDinheiro(produto.preco)}
                     {produto.estoque === null ? "" : produto.estoque > 0 ? ` (estoque: ${produto.estoque})` : " (sem estoque)"}
                   </option>
                 ))}
+                {produtosParaSelecionar.length === 0 && <option disabled>Nenhum produto encontrado</option>}
               </select>
               {!carregandoProdutos && produtosCadastrados.length === 0 && (
                 <small className="atendimento-dica">
@@ -844,11 +1005,18 @@ function Atendimento() {
           </div>
           <div className="atendimento-tabela-container">
             <table className="atendimento-tabela">
-              <thead><tr><th className="medium-h3">Produto</th><th className="medium-h3">Código</th><th className="medium-h3">Quantidade</th><th className="medium-h3">Preço unitário</th><th className="medium-h3">Subtotal</th><th aria-label="Ações" /></tr></thead>
+              <thead><tr>
+                <SortableHeader label="Produto" active={ordenacaoItens?.coluna === "produto"} direction={ordenacaoItens?.direcao ?? "desc"} onClick={() => alternarOrdenacaoItens("produto")} />
+                <SortableHeader label="Código" active={ordenacaoItens?.coluna === "codigo"} direction={ordenacaoItens?.direcao ?? "desc"} onClick={() => alternarOrdenacaoItens("codigo")} />
+                <SortableHeader label="Quantidade" active={ordenacaoItens?.coluna === "quantidade"} direction={ordenacaoItens?.direcao ?? "desc"} onClick={() => alternarOrdenacaoItens("quantidade")} />
+                <SortableHeader label="Preço unitário" active={ordenacaoItens?.coluna === "preco"} direction={ordenacaoItens?.direcao ?? "desc"} onClick={() => alternarOrdenacaoItens("preco")} />
+                <SortableHeader label="Subtotal" active={ordenacaoItens?.coluna === "subtotal"} direction={ordenacaoItens?.direcao ?? "desc"} onClick={() => alternarOrdenacaoItens("subtotal")} />
+                <th aria-label="Ações" />
+              </tr></thead>
               <tbody>
                 {itensPedido.length === 0 ? (
                   <tr><td className="atendimento-sem-itens light-h3" colSpan={6}>Nenhum produto adicionado.</td></tr>
-                ) : itensPedido.map((item) => (
+                ) : itensPedidoOrdenados.map((item) => (
                   <tr key={item.id}>
                     <td className="medium-h3">{item.nome}</td><td className="light-h3">{item.codigo}</td><td className="light-h3">{item.quantidade}</td><td className="light-h3">{formatarDinheiro(item.precoUnitario)}</td><td className="medium-h3">{formatarDinheiro(item.subtotal)}</td>
                     <td><button type="button" className="atendimento-remover" onClick={() => removerProduto(item.id)} aria-label={`Remover ${item.nome}`}>×</button></td>
@@ -925,7 +1093,19 @@ function Atendimento() {
           <div onClick={salvando ? undefined : limparAtendimento} aria-disabled={salvando}>
             <Button texto="Cancelar" cor="btn-secundaria" />
           </div>
-          <div onClick={salvando ? undefined : () => void finalizarPedido()} aria-disabled={salvando}>
+          <div
+            className={
+              salvando || falhaFechamento
+                ? "atendimento-acao-bloqueada"
+                : ""
+            }
+            onClick={
+              salvando || falhaFechamento
+                ? undefined
+                : () => void finalizarPedido()
+            }
+            aria-disabled={salvando || Boolean(falhaFechamento)}
+          >
             <Button texto={salvando ? "Salvando..." : "Confirmar"} cor="btn-primaria" />
           </div>
         </div>

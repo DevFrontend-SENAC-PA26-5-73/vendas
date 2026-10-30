@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { Pencil, Search, Trash2 } from "lucide-react";
+import SortableHeader from "../SortableHeader/SortableHeader";
+import { ordenarLista } from "../../lib/ordenacao";
+import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 import "./Cargo.css";
 
 import { API_BASE_URL } from "../../lib/api";
@@ -10,6 +14,8 @@ interface CargoItem {
   id: number | string;
   nome: string;
 }
+
+type ColunaOrdenacaoCargo = "codigo" | "nome";
 
 interface Aviso {
   tipo: "ok" | "erro";
@@ -38,10 +44,15 @@ async function requisicao<T = unknown>(
   return texto ? (JSON.parse(texto) as T) : null;
 }
 
-export default function Cargo() {
+export default function Cargo({ buscaGlobal }: { buscaGlobal: string }) {
   const [cargos, setCargos] = useState<CargoItem[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroLista, setErroLista] = useState("");
+  const [busca, setBusca] = useState("");
+  const [ordenacao, setOrdenacao] = useState<{
+    coluna: ColunaOrdenacaoCargo;
+    direcao: DirecaoOrdenacao;
+  } | null>(null);
 
   const [nome, setNome] = useState("");
   const [editandoId, setEditandoId] = useState<CargoItem["id"] | null>(null);
@@ -50,6 +61,41 @@ export default function Cargo() {
 
   const nomeLimpo = nome.trim();
   const editando = editandoId !== null;
+
+  const cargosFiltrados = useMemo(() => {
+    const termos = [busca, buscaGlobal]
+      .map((valor) => valor
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase(),
+      )
+      .filter(Boolean);
+
+    return cargos.filter((cargo) =>
+      termos.every((termo) => `${cargo.id} ${cargo.nome}`
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .includes(termo)),
+    );
+  }, [busca, buscaGlobal, cargos]);
+
+  const cargosOrdenados = useMemo(() => {
+    if (!ordenacao) return cargosFiltrados;
+    return ordenarLista(
+      cargosFiltrados,
+      (cargo) => ordenacao.coluna === "codigo" ? Number(cargo.id) : cargo.nome,
+      ordenacao.direcao,
+    );
+  }, [cargosFiltrados, ordenacao]);
+
+  function alternarOrdenacao(coluna: ColunaOrdenacaoCargo) {
+    setOrdenacao((atual) => ({
+      coluna,
+      direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
+    }));
+  }
 
   const carregarCargos = useCallback(async () => {
     try {
@@ -192,15 +238,28 @@ export default function Cargo() {
       <div className="cargo-secao">
         <div className="cargo-titulo-linha">
           <h2 className="cargo-titulo">Cargos cadastrados</h2>
-          <span className="cargo-contador">{cargos.length} item(ns)</span>
+          <span className="cargo-contador">
+            {cargosFiltrados.length} de {cargos.length} cargo(s)
+          </span>
         </div>
+
+        <label className="cargo-busca">
+          <Search size={18} aria-hidden="true" />
+          <input
+            type="search"
+            value={busca}
+            onChange={(evento) => setBusca(evento.target.value)}
+            placeholder="Buscar cargo por nome ou código"
+            aria-label="Buscar cargos"
+          />
+        </label>
 
         <div className="cargo-tabela-wrap">
           <table className="cargo-tabela">
             <thead>
               <tr>
-                <th className="cargo-col-id">Código</th>
-                <th>Cargo</th>
+                <SortableHeader label="Código" className="cargo-col-id" active={ordenacao?.coluna === "codigo"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("codigo")} />
+                <SortableHeader label="Cargo" active={ordenacao?.coluna === "nome"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("nome")} />
                 <th className="cargo-col-acoes">Ações</th>
               </tr>
             </thead>
@@ -224,35 +283,44 @@ export default function Cargo() {
                 </tr>
               )}
 
-              {!carregando && !erroLista && cargos.length === 0 && (
+              {!carregando && !erroLista && cargosOrdenados.length === 0 && (
                 <tr>
                   <td colSpan={3} className="cargo-vazio">
-                    Nenhum cargo adicionado.
+                    {cargos.length === 0
+                      ? "Nenhum cargo adicionado."
+                      : "Nenhum cargo corresponde à busca."}
                   </td>
                 </tr>
               )}
 
               {!carregando &&
                 !erroLista &&
-                cargos.map((cargo) => (
+                cargosOrdenados.map((cargo) => (
                   <tr key={cargo.id}>
                     <td>{cargo.id}</td>
                     <td>{cargo.nome}</td>
                     <td className="cargo-col-acoes">
-                      <button
-                        type="button"
-                        className="cargo-link"
-                        onClick={() => iniciarEdicao(cargo)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="cargo-link cargo-link-perigo"
-                        onClick={() => remover(cargo)}
-                      >
-                        Remover
-                      </button>
+                      <div className="cargo-acoes-linha">
+                        <button
+                          type="button"
+                          className="cargo-acao cargo-editar"
+                          onClick={() => iniciarEdicao(cargo)}
+                          aria-label={`Editar ${cargo.nome}`}
+                          title="Editar cargo"
+                        >
+                          <Pencil size={16} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="cargo-acao cargo-excluir"
+                          onClick={() => void remover(cargo)}
+                          aria-label={`Excluir ${cargo.nome}`}
+                          title="Excluir cargo"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

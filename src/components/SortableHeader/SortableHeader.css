@@ -1,0 +1,35 @@
+.sortable-header-cell {
+  text-align: inherit;
+}
+
+.sortable-header-button {
+  width: 100%;
+  min-width: max-content;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sortable-header-button svg {
+  flex: 0 0 auto;
+  opacity: 0.72;
+}
+
+.sortable-header-button:hover svg,
+.sortable-header-button:focus-visible svg {
+  opacity: 1;
+}
+
+.sortable-header-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 2px;
+}

@@ -1,7 +1,12 @@
 import "./Cabecalho.css";
 import { Heart, ShoppingCart, User } from "lucide-react";
 
-function Cabecalho(){
+type CabecalhoProps = {
+    busca: string;
+    aoAlterarBusca: (busca: string) => void;
+};
+
+function Cabecalho({ busca, aoAlterarBusca }: CabecalhoProps){
     return (
         <div className="container">
 
@@ -15,8 +20,11 @@ function Cabecalho(){
 
                 <input
                     className="pesquisa"
-                    type="text"
-                    placeholder="Pesquisar..."
+                    type="search"
+                    value={busca}
+                    onChange={(evento) => aoAlterarBusca(evento.target.value)}
+                    placeholder="Pesquisar nesta tela..."
+                    aria-label="Pesquisar na tela atual"
                 />
 
                 <button className="botao">
