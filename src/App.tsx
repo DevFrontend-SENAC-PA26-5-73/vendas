@@ -11,9 +11,14 @@ import Dashboard from "./components/Dashboard/Dashboard";
 import Atendimento from "./components/Atendimento/Atendimento";
 import Clientes from "./components/Clientes/Clientes";
 import Movimentacao from "./components/Movimentacao/Movimentacao";
+feature/add-configuraçao-rebecca
 import Inventario from "./components/Inventario/Inventario";
 import Produtos from "./components/Produtos/Produto";
 import Configuracao from "./components/Configuracao/Configuracao";
+
+import Produtos from "./components/Produtos/Produtos";
+import Inventario from "./components/Inventario/Inventario";
+main
 
 function App() {
   const [paginaAtiva, setPaginaAtiva] = useState<string>("Dashboard");
@@ -58,7 +63,7 @@ function App() {
         return <Configuracao />;
 
       default:
-        return <Dashboard />;
+        return <> </>;
     }
   }
 

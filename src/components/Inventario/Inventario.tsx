@@ -27,84 +27,6 @@ const rotuloSituacao: Record<Situacao, string> = {
 
 /* =========================
    Normalização dos dados
-========================= */
-
-function extrairLista(dados: unknown): unknown[] {
-  if (Array.isArray(dados)) return dados;
-
-  if (dados && typeof dados === "object") {
-    const registro = dados as Record<string, unknown>;
-
-    for (const chave of [
-      "produtos",
-      "estoque",
-      "data",
-      "items",
-      "dados",
-    ]) {
-      if (Array.isArray(registro[chave])) {
-        return registro[chave] as unknown[];
-      }
-    }
-  }
-
-  return [];
-}
-
-function normalizarProdutos(dados: unknown): Produto[] {
-  return extrairLista(dados)
-    .filter(
-      (item): item is Record<string, unknown> =>
-        !!item && typeof item === "object",
-    )
-    .map((item) => {
-      const id = Number(item.id);
-
-      return {
-        id,
-        nome:
-          typeof item.nome === "string" && item.nome.trim()
-            ? item.nome
-            : `Produto #${id}`,
-        descricao:
-          typeof item.descricao === "string" ? item.descricao : "",
-        codigo_barra:
-          item.codigo_barra != null ? String(item.codigo_barra) : "",
-        quantidade: Number(item.quantidade ?? 0),
-        tipo: typeof item.tipo === "string" ? item.tipo : "",
-        preco: Number(item.preco ?? 0),
-      };
-    })
-    .filter((produto) => Number.isFinite(produto.id) && produto.id > 0);
-}
-
-function normalizarEstoque(dados: unknown): Map<number, number> {
-  const quantidades = new Map<number, number>();
-
-  extrairLista(dados).forEach((item) => {
-    if (!item || typeof item !== "object") return;
-
-    const registro = item as Record<string, unknown>;
-
-    const id = Number(
-      registro.produto_id ?? registro.produtos_id ?? registro.id,
-    );
-
-    const quantidade = Number(
-      registro.quantidade ?? registro.qtd ?? registro.estoque,
-    );
-
-    if (Number.isFinite(id) && id > 0 && Number.isFinite(quantidade)) {
-      quantidades.set(id, quantidade);
-    }
-  });
-
-  return quantidades;
-}
-
-/* =========================
-   Formatação
-========================= */
 
 function formatarMoeda(valor: number) {
   return Number(valor || 0).toLocaleString("pt-BR", {
@@ -130,19 +52,6 @@ function classificarEstoque(quantidade: number): Situacao {
 
 /* =========================
    Componente
-========================= */
-
-function Inventario() {
-  const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
-  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
-
-  const [busca, setBusca] = useState("");
-  const [filtroCategoria, setFiltroCategoria] = useState("todas");
-  const [filtroSituacao, setFiltroSituacao] = useState<"todas" | Situacao>(
-    "todas",
-  );
 
   const carregarInventario = useCallback(async () => {
     try {
