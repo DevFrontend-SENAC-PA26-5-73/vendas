@@ -1,4 +1,5 @@
 import "./MenuLateral.css";
+import { IconeEngrenagem } from "../Configuracao/Configuracao";
 
 const gruposMenu = [
   {
@@ -13,7 +14,6 @@ const gruposMenu = [
     titulo: "Estoque",
     itens: ["Movimentação", "Inventário"],
   },
-
 ];
 
 type MenuLateralProps = {
@@ -31,13 +31,8 @@ function MenuLateral({
 
       <nav className="menu-navegacao">
         {gruposMenu.map((grupo) => (
-          <section
-            className="menu-grupo"
-            key={grupo.titulo}
-          >
-            <h3 className="menu-titulo-grupo">
-              {grupo.titulo}
-            </h3>
+          <section className="menu-grupo" key={grupo.titulo}>
+            <h3 className="menu-titulo-grupo">{grupo.titulo}</h3>
 
             <div className="menu-grupo-itens medium-h3">
               {grupo.itens.map((item) => (
@@ -56,6 +51,20 @@ function MenuLateral({
           </section>
         ))}
       </nav>
+
+      <div className="menu-rodape">
+        <button
+          type="button"
+          className={`menu-config ${
+            paginaAtiva === "Configuração" ? "menu-config--ativo" : ""
+          }`}
+          aria-label="Configuração"
+          title="Configuração"
+          onClick={() => aoMudarPagina("Configuração")}
+        >
+          <IconeEngrenagem />
+        </button>
+      </div>
     </aside>
   );
 }
