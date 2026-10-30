@@ -74,7 +74,7 @@
 
 .fluxo-resumo {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
 }
 
@@ -132,14 +132,6 @@
   justify-content: space-between;
   gap: 24px;
   border-bottom: 1px solid var(--c);
-}
-
-.fluxo-status-edicao {
-  padding: 8px 14px;
-  color: var(--b);
-  background-color: var(--primaria);
-  border-radius: 20px;
-  white-space: nowrap;
 }
 
 .fluxo-formulario {
@@ -341,6 +333,17 @@
   font-size: 11px;
 }
 
+.fluxo-status-entrada {
+  background-color: rgb(198 255 0 / 18%);
+  border-color: var(--primaria);
+}
+
+.fluxo-status-saida {
+  color: #9f2836;
+  background-color: #ffe7ea;
+  border-color: #f0b5bc;
+}
+
 .fluxo-produto {
   display: flex;
   align-items: center;
@@ -361,61 +364,6 @@
 
 .fluxo-valor-total {
   font-weight: 600;
-}
-
-.fluxo-coluna-acoes {
-  width: 108px;
-  text-align: right !important;
-}
-
-.fluxo-acoes-linha {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.fluxo-acao {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--b);
-  background-color: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-}
-
-.fluxo-acao:hover {
-  transform: translateY(-1px);
-}
-
-.fluxo-editar:hover {
-  background-color: var(--primaria);
-}
-
-.fluxo-excluir {
-  color: #a32939;
-}
-
-.fluxo-excluir:hover {
-  color: var(--w);
-  background-color: #a32939;
-}
-
-.fluxo-sem-acao {
-  color: #888890;
-  font-family: "Montserrat", sans-serif;
-  font-size: 10px;
-}
-
-.fluxo-linha-em-edicao {
-  background-color: rgb(198 255 0 / 10%) !important;
-  box-shadow: inset 4px 0 0 var(--primaria);
 }
 
 .fluxo-campo select:disabled {

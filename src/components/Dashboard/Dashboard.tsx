@@ -4,7 +4,9 @@ import type { ApexOptions } from "apexcharts";
 
 import "./Dashboard.css";
 
-const API_URL = "https://vendas.gabrielpimentel.com.br";
+import { API_BASE_URL } from "../../lib/api";
+
+const API_URL = API_BASE_URL;
 
 /* =========================
    Tipos atuais da API
@@ -480,9 +482,6 @@ function Dashboard() {
 
   async function carregarDashboard() {
     try {
-      setCarregando(true);
-      setErro(null);
-
       const [
         respostaDashboard,
         respostaFuncionarios,
@@ -549,8 +548,18 @@ function Dashboard() {
   }
 
   useEffect(() => {
-    carregarDashboard();
+    async function iniciar() {
+      await carregarDashboard();
+    }
+
+    void iniciar();
   }, []);
+
+  function recarregarDashboard() {
+    setCarregando(true);
+    setErro(null);
+    void carregarDashboard();
+  }
 
   if (carregando) {
     return (
@@ -581,7 +590,7 @@ function Dashboard() {
           <button
             type="button"
             className="dashboard-ver-todos medium-h3"
-            onClick={carregarDashboard}
+            onClick={recarregarDashboard}
           >
             Tentar novamente
           </button>
@@ -886,7 +895,7 @@ function Dashboard() {
           <button
             type="button"
             className="dashboard-ver-todos medium-h3"
-            onClick={carregarDashboard}
+            onClick={recarregarDashboard}
           >
             Atualizar
           </button>

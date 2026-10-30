@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import "./Cargo.css";
 
-const API_URL = "https://vendas.gabrielpimentel.com.br/cargo";
+import { API_BASE_URL } from "../../lib/api";
+
+const API_URL = `${API_BASE_URL}/cargo`;
 
 interface CargoItem {
   id: number | string;
@@ -50,11 +52,10 @@ export default function Cargo() {
   const editando = editandoId !== null;
 
   const carregarCargos = useCallback(async () => {
-    setCarregando(true);
-    setErroLista("");
     try {
       const dados = await requisicao<CargoItem[]>();
       setCargos(Array.isArray(dados) ? dados : []);
+      setErroLista("");
     } catch (e) {
       setErroLista(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {
@@ -62,8 +63,18 @@ export default function Cargo() {
     }
   }, []);
 
+  function tentarNovamente() {
+    setCarregando(true);
+    setErroLista("");
+    void carregarCargos();
+  }
+
   useEffect(() => {
-    carregarCargos();
+    async function iniciar() {
+      await carregarCargos();
+    }
+
+    void iniciar();
   }, [carregarCargos]);
 
   function limparFormulario() {
@@ -206,7 +217,7 @@ export default function Cargo() {
                 <tr>
                   <td colSpan={3} className="cargo-vazio cargo-estado-erro">
                     {erroLista}{" "}
-                    <button type="button" className="cargo-link" onClick={carregarCargos}>
+                    <button type="button" className="cargo-link" onClick={tentarNovamente}>
                       Tentar novamente
                     </button>
                   </td>

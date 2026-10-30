@@ -1,6 +1,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+
+import { API_BASE_URL } from "../../lib/api";
 import { Pencil, Search, Trash2 } from "lucide-react";
 
 import Button from "../Button/Button";
@@ -23,7 +25,7 @@ type FormularioCliente = Omit<ICliente, "id"> & {
   complemento: string;
 };
 
-const API_URL = "https://vendas.gabrielpimentel.com.br/clientes";
+const API_URL = `${API_BASE_URL}/clientes`;
 
 const formularioInicial: FormularioCliente = {
   cpf: "",
@@ -65,8 +67,6 @@ function Clientes() {
   // GET: listar todos os clientes
   async function buscarClientes() {
     try {
-      setCarregando(true);
-
       const resposta = await axios.get<unknown>(API_URL);
 
       console.log("Clientes recebidos da API:", resposta.data);
@@ -83,7 +83,11 @@ function Clientes() {
   }
 
   useEffect(() => {
-    void buscarClientes();
+    async function iniciar() {
+      await buscarClientes();
+    }
+
+    void iniciar();
   }, []);
 
   // Pesquisa os clientes pelo nome, CPF, endereço e outros campos

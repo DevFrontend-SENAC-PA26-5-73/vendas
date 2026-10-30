@@ -14,6 +14,8 @@ import {
 import Button from "../Button/Button";
 import "./Produtos.css";
 
+import { API_BASE_URL } from "../../lib/api";
+
 interface IProduto {
   id: number;
   nome: string;
@@ -53,7 +55,7 @@ type ApiErro = {
   statusCode?: number;
 };
 
-const API_URL = "http://10.3.20.30:5001";
+const API_URL = API_BASE_URL;
 const API_PRODUTOS = `${API_URL}/produtos`;
 
 const formularioInicial: FormularioProduto = {
@@ -433,7 +435,7 @@ function Produtos() {
 
   const [filtro, setFiltro] = useState("");
   const [carregando, setCarregando] =
-    useState(false);
+    useState(true);
   const [salvando, setSalvando] =
     useState(false);
   const [mensagem, setMensagem] =
@@ -454,8 +456,6 @@ function Produtos() {
   const buscarProdutos = useCallback(
     async () => {
       try {
-        setCarregando(true);
-
         const resposta = await fetch(
           `${API_PRODUTOS}?atualizacao=${Date.now()}`,
           {
@@ -501,7 +501,7 @@ function Produtos() {
             tipo: "erro",
             codigo: "PROD-N001",
             texto:
-              "A API não respondeu. Confirme se o servidor 10.3.20.30:5001 está acessível neste computador e se o front-end não está em HTTPS.",
+              `A API não respondeu. Confirme se o servidor ${API_BASE_URL} está acessível neste computador e se o front-end não está em HTTPS.`,
           });
         } else if (
           erro instanceof Error &&
@@ -536,7 +536,11 @@ function Produtos() {
   );
 
   useEffect(() => {
-    void buscarProdutos();
+    async function iniciar() {
+      await buscarProdutos();
+    }
+
+    void iniciar();
   }, [buscarProdutos]);
 
   useEffect(() => {

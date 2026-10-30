@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import "./Funcionario.css";
 
-const API_BASE = "https://vendas.gabrielpimentel.com.br";
-const API_FUNCIONARIOS = `${API_BASE}/funcionarios`;
-const API_CARGOS = `${API_BASE}/cargo`;
+import { API_BASE_URL } from "../../lib/api";
+
+const API_FUNCIONARIOS = `${API_BASE_URL}/funcionarios`;
+const API_CARGOS = `${API_BASE_URL}/cargo`;
 
 interface Funcionario {
   id: number;
@@ -144,8 +145,6 @@ export default function Funcionario() {
     form.departamento_id !== "";
 
   const carregarDados = useCallback(async () => {
-    setCarregando(true);
-    setErroLista("");
     try {
       const [listaFuncionarios, listaCargos] = await Promise.all([
         requisicao<Funcionario[]>(API_FUNCIONARIOS),
@@ -153,6 +152,7 @@ export default function Funcionario() {
       ]);
       setFuncionarios(Array.isArray(listaFuncionarios) ? listaFuncionarios : []);
       setCargos(Array.isArray(listaCargos) ? listaCargos : []);
+      setErroLista("");
     } catch (e) {
       setErroLista(mensagemDeErro(e));
     } finally {
@@ -160,8 +160,18 @@ export default function Funcionario() {
     }
   }, []);
 
+  function tentarNovamente() {
+    setCarregando(true);
+    setErroLista("");
+    void carregarDados();
+  }
+
   useEffect(() => {
-    carregarDados();
+    async function iniciar() {
+      await carregarDados();
+    }
+
+    void iniciar();
   }, [carregarDados]);
 
   function nomeDoCargo(id: number) {
@@ -458,7 +468,7 @@ export default function Funcionario() {
                 <tr>
                   <td colSpan={7} className="func-vazio func-estado-erro">
                     {erroLista}{" "}
-                    <button type="button" className="func-link" onClick={carregarDados}>
+                    <button type="button" className="func-link" onClick={tentarNovamente}>
                       Tentar novamente
                     </button>
                   </td>

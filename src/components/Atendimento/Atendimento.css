@@ -62,6 +62,65 @@
 }
 
 /* ========================================
+   AVISOS DE CARREGAMENTO
+======================================== */
+
+.atendimento-aviso {
+  margin-top: 18px;
+  padding: 14px 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  border-radius: 8px;
+
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h3);
+}
+
+.atendimento-aviso-erro {
+  color: #7d1b26;
+  background-color: #ffe7ea;
+  border: 1px solid #f0b5bc;
+}
+
+.atendimento-aviso > div {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.atendimento-aviso small {
+  color: inherit;
+  font-size: 11px;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+.atendimento-aviso-acao {
+  padding: 9px 16px;
+
+  border: 1px solid currentColor;
+  border-radius: 6px;
+
+  color: inherit;
+  background-color: transparent;
+
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h3);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.atendimento-aviso-acao:hover {
+  background-color: rgb(255 255 255 / 45%);
+}
+
+/* ========================================
    SEÇÕES
 ======================================== */
 
@@ -188,6 +247,18 @@
 .atendimento-campo input[readonly] {
   color: #73737c;
   cursor: default;
+}
+
+.atendimento-campo select:disabled {
+  color: #8a8a92;
+  cursor: not-allowed;
+}
+
+.atendimento-dica {
+  color: #8a8a92;
+  font-family: "Montserrat", sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 /* ========================================
@@ -508,5 +579,301 @@
 
   .atendimento-acoes {
     flex-direction: column;
+  }
+}
+
+/* ========================================
+   COMPROVANTE DO PEDIDO
+======================================== */
+
+.atendimento-comprovante-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+
+  padding: 24px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+
+  overflow-y: auto;
+
+  background-color: rgb(20 20 24 / 55%);
+}
+
+.atendimento-comprovante {
+  width: 100%;
+  max-width: 760px;
+  margin: auto;
+  padding: 28px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  color: var(--b);
+  background-color: var(--w);
+
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 25%);
+}
+
+.atendimento-comprovante-cabecalho {
+  padding-bottom: 16px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+
+  border-bottom: 1px solid var(--c);
+}
+
+.atendimento-comprovante-cabecalho h2,
+.atendimento-comprovante-cabecalho p {
+  margin: 0;
+}
+
+.atendimento-comprovante-cabecalho p {
+  margin-top: 6px;
+}
+
+.atendimento-comprovante-fechar {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  border-radius: 6px;
+
+  color: var(--b);
+  background-color: var(--c);
+
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.atendimento-comprovante-fechar:hover {
+  background-color: var(--primaria);
+}
+
+.atendimento-comprovante-dados {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.atendimento-comprovante-dados > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.atendimento-comprovante-dados small {
+  color: #707078;
+  font-family: "Montserrat", sans-serif;
+  font-size: 11px;
+}
+
+.atendimento-comprovante-tabela-container {
+  width: 100%;
+
+  overflow-x: auto;
+}
+
+.atendimento-comprovante-tabela {
+  width: 100%;
+  min-width: 520px;
+
+  border-collapse: collapse;
+
+  color: var(--b);
+  font-size: var(--h3);
+}
+
+.atendimento-comprovante-tabela th,
+.atendimento-comprovante-tabela td {
+  padding: 10px 12px;
+
+  text-align: left;
+}
+
+.atendimento-comprovante-tabela thead {
+  background-color: var(--primaria);
+}
+
+.atendimento-comprovante-tabela tbody tr {
+  border-bottom: 1px solid var(--c);
+}
+
+.atendimento-comprovante-tabela th:nth-child(n + 3),
+.atendimento-comprovante-tabela td:nth-child(n + 3) {
+  text-align: right;
+}
+
+.atendimento-comprovante-totais {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.atendimento-comprovante-totais > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.atendimento-comprovante-total {
+  padding-top: 10px;
+
+  border-top: 1px solid var(--c);
+
+  font-size: var(--h2);
+}
+
+.atendimento-comprovante-pagamento ul {
+  margin: 8px 0 0;
+  padding: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  list-style: none;
+}
+
+.atendimento-comprovante-pagamento li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.atendimento-comprovante-observacoes p {
+  margin: 6px 0 0;
+  color: #4a4a52;
+  white-space: pre-wrap;
+}
+
+.atendimento-comprovante-acoes {
+  padding-top: 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+
+  border-top: 1px solid var(--c);
+}
+
+.atendimento-comprovante-fechar-texto,
+.atendimento-comprovante-imprimir {
+  height: 42px;
+  padding: 0 22px;
+
+  border: none;
+  border-radius: 6px;
+
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h3);
+  cursor: pointer;
+}
+
+.atendimento-comprovante-fechar-texto {
+  color: var(--b);
+  background-color: var(--c);
+}
+
+.atendimento-comprovante-imprimir {
+  color: var(--b);
+  background-color: var(--primaria);
+}
+
+.atendimento-comprovante-imprimir:hover {
+  filter: brightness(0.95);
+}
+
+@media (max-width: 650px) {
+  .atendimento-comprovante-fundo {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .atendimento-comprovante {
+    min-height: 100%;
+    padding: 20px;
+
+    border-radius: 0;
+  }
+
+  .atendimento-comprovante-dados {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================
+   IMPRESSÃO: somente o comprovante
+======================================== */
+
+@media print {
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: visible;
+
+    background-color: #fff;
+  }
+
+  .app {
+    display: block;
+    height: auto;
+    overflow: visible;
+
+    background-color: #fff;
+  }
+
+  .app-cabecalho,
+  .app-menu,
+  .atendimento-principal,
+  .atendimento-comprovante-acoes {
+    display: none !important;
+  }
+
+  .app-main {
+    display: block;
+    overflow: visible;
+
+    padding: 0;
+
+    background-color: #fff;
+  }
+
+  .atendimento-comprovante-fundo {
+    position: static;
+    inset: auto;
+
+    padding: 0;
+
+    display: block;
+    overflow: visible;
+
+    background: none;
+  }
+
+  .atendimento-comprovante {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+
+    border-radius: 0;
+    box-shadow: none;
   }
 }

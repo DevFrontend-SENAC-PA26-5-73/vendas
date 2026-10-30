@@ -17,7 +17,7 @@ import {
 
 import "./Inventario.css";
 
-const API_BASE_URL = "http://10.3.20.30:5001";
+import { API_BASE_URL } from "../../lib/api";
 
 const API = {
   produtos: `${API_BASE_URL}/produtos`,
@@ -183,9 +183,6 @@ function Inventario() {
 
   const carregarInventario = useCallback(async () => {
     try {
-      setCarregando(true);
-      setMensagem(null);
-
       const [respostaProdutos, respostaEstoque] =
         await Promise.all([
           axios.get<unknown>(API.produtos, {
@@ -229,6 +226,7 @@ function Inventario() {
       );
 
       setItens(inventario);
+      setMensagem(null);
     } catch (erro) {
       console.group("[INVENTARIO] Erro ao carregar dados");
       console.error(erro);
@@ -249,14 +247,17 @@ function Inventario() {
   }, []);
 
   useEffect(() => {
-    void carregarInventario();
+    async function iniciar() {
+      await carregarInventario();
+    }
+
+    void iniciar();
   }, [carregarInventario]);
 
   useEffect(() => {
     function atualizarInventario() {
       void carregarInventario();
     }
-
     window.addEventListener(
       "produtos-atualizados",
       atualizarInventario,
@@ -277,6 +278,12 @@ function Inventario() {
       );
     };
   }, [carregarInventario]);
+
+  function atualizarManual() {
+    setCarregando(true);
+    setMensagem(null);
+    void carregarInventario();
+  }
 
   const categorias = useMemo(() => {
     return Array.from(
@@ -383,7 +390,7 @@ function Inventario() {
         <button
           type="button"
           className="inventario-atualizar medium-h3"
-          onClick={() => void carregarInventario()}
+          onClick={atualizarManual}
           disabled={carregando}
         >
           <RefreshCw

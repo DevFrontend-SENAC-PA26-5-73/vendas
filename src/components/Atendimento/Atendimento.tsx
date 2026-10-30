@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiRequest, API_BASE_URL, descreverErro } from "../../lib/api";
 import "./Atendimento.css";
 import Button from "../Button/Button";
 
@@ -39,15 +39,13 @@ type ItemPedido = {
   precoUnitario: number;
   subtotal: number;
 };
-
-const API_BASE = "https://vendas.gabrielpimentel.com.br";
-const API_CLIENTES_URL = `${API_BASE}/clientes`;
-const API_FUNCIONARIOS_URL = `${API_BASE}/funcionarios`;
-const API_TRANSPORTADORAS_URL = `${API_BASE}/transportadoras`;
-const API_PRODUTOS_URL = `${API_BASE}/produtos`;
-const API_VENDAS_URL = `${API_BASE}/vendas`;
-const API_ITENS_VENDA_URL = `${API_BASE}/itemvenda`;
-const API_PAGAMENTOS_URL = `${API_BASE}/pagamentos`;
+const API_CLIENTES_URL = "/clientes";
+const API_FUNCIONARIOS_URL = "/funcionarios";
+const API_TRANSPORTADORAS_URL = "/transportadoras";
+const API_PRODUTOS_URL = "/produtos";
+const API_VENDAS_URL = "/vendas";
+const API_ITENS_VENDA_URL = "/itemvenda";
+const API_PAGAMENTOS_URL = "/pagamentos";
 
 function hojeISO() {
   const agora = new Date();
@@ -57,8 +55,54 @@ function hojeISO() {
 }
 
 // A API não tem coluna de código: o código do pedido é o ID da venda
-function formatarCodigoPedido(id: number) {
-  return `PED-${new Date().getFullYear()}-${String(id).padStart(3, "0")}`;
+function formatarCodigoPedido(id: number, ano = new Date().getFullYear()) {
+  return `PED-${ano}-${String(id).padStart(3, "0")}`;
+}
+
+function comoObjeto(valor: unknown): Record<string, unknown> | null {
+  return valor !== null && typeof valor === "object"
+    ? (valor as Record<string, unknown>)
+    : null;
+}
+
+function lerTexto(
+  registro: Record<string, unknown>,
+  ...chaves: string[]
+): string {
+  for (const chave of chaves) {
+    const valor = registro[chave];
+
+    if (typeof valor === "string" && valor.trim() !== "") {
+      return valor;
+    }
+
+    if (typeof valor === "number" && Number.isFinite(valor)) {
+      return String(valor);
+    }
+  }
+
+  return "";
+}
+
+function lerNumero(
+  registro: Record<string, unknown>,
+  ...chaves: string[]
+): number {
+  for (const chave of chaves) {
+    const valor = registro[chave];
+
+    if (valor === null || valor === undefined || valor === "") {
+      continue;
+    }
+
+    const numero = Number(valor);
+
+    if (Number.isFinite(numero)) {
+      return numero;
+    }
+  }
+
+  return Number.NaN;
 }
 
 function extrairLista(dados: unknown): unknown[] {
@@ -84,61 +128,196 @@ function extrairLista(dados: unknown): unknown[] {
 
 function normalizarClientes(dados: unknown): Cliente[] {
   return extrairLista(dados)
-    .map((item: any) => ({
-      id: Number(item.id ?? item.cliente_id),
-      nome: String(item.nome ?? item.nome_cliente ?? ""),
-      cpf: String(item.cpf ?? ""),
-      contato: String(item.contato ?? item.telefone ?? item.celular ?? ""),
-      email: String(item.email ?? ""),
-    }))
-    .filter((cliente) => Number.isFinite(cliente.id) && cliente.id > 0 && cliente.nome.trim() !== "");
+    .map((item) => {
+      const registro = comoObjeto(item);
+
+      if (!registro) return null;
+
+      return {
+        id: lerNumero(registro, "id", "cliente_id"),
+        nome: lerTexto(registro, "nome", "nome_cliente"),
+        cpf: lerTexto(registro, "cpf"),
+        contato: lerTexto(registro, "contato", "telefone", "celular"),
+        email: lerTexto(registro, "email"),
+      };
+    })
+    .filter(
+      (cliente): cliente is Cliente =>
+        cliente !== null &&
+        Number.isFinite(cliente.id) &&
+        cliente.id > 0 &&
+        cliente.nome.trim() !== "",
+    );
 }
 
 function normalizarFuncionarios(dados: unknown): Funcionario[] {
   return extrairLista(dados)
-    .map((item: any) => ({
-      id: Number(item.id ?? item.funcionario_id),
-      nome: String(item.nome ?? ""),
-    }))
-    .filter((f) => Number.isFinite(f.id) && f.id > 0 && f.nome.trim() !== "");
+    .map((item) => {
+      const registro = comoObjeto(item);
+
+      if (!registro) return null;
+
+      return {
+        id: lerNumero(registro, "id", "funcionario_id"),
+        nome: lerTexto(registro, "nome"),
+      };
+    })
+    .filter(
+      (funcionario): funcionario is Funcionario =>
+        funcionario !== null &&
+        Number.isFinite(funcionario.id) &&
+        funcionario.id > 0 &&
+        funcionario.nome.trim() !== "",
+    );
 }
 
 function normalizarTransportadoras(dados: unknown): Transportadora[] {
   return extrairLista(dados)
-    .map((item: any) => {
-      const id = Number(item.id ?? item.transportadora_id ?? item.transportadoras_id);
+    .map((item) => {
+      const registro = comoObjeto(item);
+
+      if (!registro) return null;
+
+      const id = lerNumero(
+        registro,
+        "id",
+        "transportadora_id",
+        "transportadoras_id",
+      );
+
       return {
         id,
-        nome: String(item.nome ?? item.razao_social ?? item.nome_fantasia ?? `Transportadora ${id}`),
+        nome:
+          lerTexto(registro, "nome", "razao_social", "nome_fantasia") ||
+          `Transportadora ${id}`,
       };
     })
-    .filter((t) => Number.isFinite(t.id) && t.id > 0);
+    .filter(
+      (transportadora): transportadora is Transportadora =>
+        transportadora !== null &&
+        Number.isFinite(transportadora.id) &&
+        transportadora.id > 0,
+    );
 }
 
 function normalizarProdutos(dados: unknown): Produto[] {
   return extrairLista(dados)
-    .map((item: any) => {
-      const estoqueBruto = item.quantidade ?? item.estoque ?? item.qtd_estoque;
+    .map((item) => {
+      const registro = comoObjeto(item);
+
+      if (!registro) return null;
+
+      const id = lerNumero(registro, "id", "produto_id");
+      const estoqueBruto =
+        registro.quantidade ?? registro.estoque ?? registro.qtd_estoque;
       const estoque =
         estoqueBruto === undefined || estoqueBruto === null || estoqueBruto === ""
           ? null
           : Number(estoqueBruto);
 
       return {
-        id: Number(item.id ?? item.produto_id),
-        nome: String(item.nome ?? item.nome_produto ?? ""),
-        codigo: String(item.codigo ?? item.codigo_produto ?? `PROD-${item.id ?? item.produto_id ?? ""}`),
-        preco: Number(item.preco ?? item.valor ?? item.preco_unitario ?? 0),
+        id,
+        nome: lerTexto(registro, "nome", "nome_produto"),
+        codigo:
+          lerTexto(registro, "codigo", "codigo_produto", "codigo_barra") ||
+          `PROD-${id}`,
+        preco: lerNumero(registro, "preco", "valor", "preco_unitario"),
         estoque: estoque !== null && Number.isFinite(estoque) ? estoque : null,
       };
     })
-    .filter((produto) =>
-      Number.isFinite(produto.id) &&
-      produto.id > 0 &&
-      produto.nome.trim() !== "" &&
-      Number.isFinite(produto.preco) &&
-      produto.preco >= 0
+    .filter(
+      (produto): produto is Produto =>
+        produto !== null &&
+        Number.isFinite(produto.id) &&
+        produto.id > 0 &&
+        produto.nome.trim() !== "" &&
+        Number.isFinite(produto.preco) &&
+        produto.preco >= 0,
     );
+}
+
+/* =========================
+   Parcelamento e comprovante
+========================= */
+
+const ROTULOS_PAGAMENTO: Record<string, string> = {
+  pix: "Pix",
+  dinheiro: "Dinheiro",
+  cartao_credito: "Cartão de crédito",
+  cartao_debito: "Cartão de débito",
+  boleto: "Boleto",
+};
+
+type ComprovantePedido = {
+  vendaId: number;
+  codigo: string;
+  dataEmissao: string;
+  dataEntrega: string;
+  cliente: Cliente;
+  funcionarioNome: string;
+  transportadoraNome: string;
+  itens: ItemPedido[];
+  subtotal: number;
+  desconto: number;
+  frete: number;
+  total: number;
+  formaPagamento: string;
+  parcelas: number[];
+  observacoes: string;
+};
+
+/** Divide o total em centavos para que a soma das parcelas seja exata. */
+function dividirEmParcelas(total: number, quantidade: number): number[] {
+  const centavos = Math.round(total * 100);
+
+  if (!Number.isInteger(quantidade) || quantidade < 1 || centavos <= 0) {
+    return [];
+  }
+
+  const base = Math.floor(centavos / quantidade);
+  const resto = centavos - base * quantidade;
+
+  return Array.from(
+    { length: quantidade },
+    (_, indice) => (base + (indice < resto ? 1 : 0)) / 100,
+  );
+}
+
+/** Soma meses a uma data ISO (YYYY-MM-DD) sem estourar o dia do mês. */
+function somarMeses(dataISO: string, meses: number): string {
+  const [ano, mes, dia] = dataISO.split("-").map(Number);
+
+  if (!ano || !mes || !dia) {
+    return hojeISO();
+  }
+
+  const mesAlvo = new Date(Date.UTC(ano, mes - 1 + meses, 1));
+  const ultimoDia = new Date(
+    Date.UTC(mesAlvo.getUTCFullYear(), mesAlvo.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  const diaFinal = Math.min(dia, ultimoDia);
+
+  return [
+    mesAlvo.getUTCFullYear(),
+    String(mesAlvo.getUTCMonth() + 1).padStart(2, "0"),
+    String(diaFinal).padStart(2, "0"),
+  ].join("-");
+}
+
+function formatarDataBr(dataISO: string): string {
+  if (!dataISO) return "Não informada";
+
+  const [ano, mes, dia] = dataISO.split("-");
+
+  if (!ano || !mes || !dia) return "Não informada";
+
+  return `${dia}/${mes}/${ano}`;
+}
+
+function paraValorMonetario(valor: string): number {
+  const numero = Number(valor.replace(",", "."));
+
+  return Number.isFinite(numero) && numero > 0 ? numero : 0;
 }
 
 function Atendimento() {
@@ -158,84 +337,91 @@ function Atendimento() {
   const [funcionarioId, setFuncionarioId] = useState("");
   const [dataEmissao, setDataEmissao] = useState(hojeISO());
   const [dataEntrega, setDataEntrega] = useState("");
+  const [parcelas, setParcelas] = useState(1);
+  const [observacoes, setObservacoes] = useState("");
+  const [comprovante, setComprovante] = useState<ComprovantePedido | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [proximoPedidoId, setProximoPedidoId] = useState<number | null>(null);
+  const [erroCarregamento, setErroCarregamento] = useState("");
+  const proximoItemId = useRef(1);
+
+  /**
+   * Todas as listas vêm do mesmo servidor (VITE_API_URL). As respostas são
+   * normalizadas porque a API pode devolver campos com nomes diferentes.
+   */
+  const carregarCadastros = useCallback(async () => {
+    setCarregandoProdutos(true);
+
+    const [clientes, funcionarios, transportadoras, produtos, vendas] =
+      await Promise.allSettled([
+        apiRequest<unknown>(API_CLIENTES_URL),
+        apiRequest<unknown>(API_FUNCIONARIOS_URL),
+        apiRequest<unknown>(API_TRANSPORTADORAS_URL),
+        apiRequest<unknown>(API_PRODUTOS_URL),
+        apiRequest<unknown>(API_VENDAS_URL),
+      ]);
+
+    const falhas: string[] = [];
+
+    if (clientes.status === "fulfilled") {
+      setClientesCadastrados(normalizarClientes(clientes.value));
+    } else {
+      setClientesCadastrados([]);
+      falhas.push("clientes");
+    }
+
+    if (funcionarios.status === "fulfilled") {
+      setFuncionariosCadastrados(normalizarFuncionarios(funcionarios.value));
+    } else {
+      setFuncionariosCadastrados([]);
+      falhas.push("funcionários");
+    }
+
+    if (transportadoras.status === "fulfilled") {
+      setTransportadorasCadastradas(
+        normalizarTransportadoras(transportadoras.value),
+      );
+    } else {
+      // Rota opcional: sem lista o campo vira um ID digitado.
+      setTransportadorasCadastradas([]);
+    }
+
+    if (produtos.status === "fulfilled") {
+      setProdutosCadastrados(normalizarProdutos(produtos.value));
+    } else {
+      setProdutosCadastrados([]);
+      falhas.push("produtos");
+    }
+
+    if (vendas.status === "fulfilled") {
+      const ids = extrairLista(vendas.value)
+        .map((venda) => lerNumero(comoObjeto(venda) ?? {}, "id"))
+        .filter((id) => Number.isFinite(id));
+      setProximoPedidoId(ids.length > 0 ? Math.max(...ids) + 1 : 1);
+    } else {
+      setProximoPedidoId(null);
+    }
+
+    setErroCarregamento(
+      falhas.length > 0
+        ? `Não foi possível carregar: ${falhas.join(", ")}.`
+        : "",
+    );
+    setCarregandoProdutos(false);
+  }, []);
 
   useEffect(() => {
-    async function buscarClientes() {
-      try {
-        const resposta = await axios.get<unknown>(API_CLIENTES_URL);
-        const lista = normalizarClientes(resposta.data);
-        setClientesCadastrados(lista);
-        if (lista.length === 0) {
-          console.warn("A API de clientes não retornou uma lista reconhecida:", resposta.data);
-        }
-      } catch (erro) {
-        console.error("Erro ao buscar clientes da API:", erro);
-        alert("Não foi possível carregar os clientes. Confira a API de clientes.");
-      }
+    async function iniciar() {
+      await carregarCadastros();
     }
 
-    async function buscarProximoPedido() {
-      try {
-        const resposta = await axios.get<unknown>(API_VENDAS_URL);
-        const ids = extrairLista(resposta.data)
-          .map((venda: any) => Number(venda.id))
-          .filter((id) => Number.isFinite(id));
-        setProximoPedidoId(ids.length > 0 ? Math.max(...ids) + 1 : 1);
-      } catch (erro) {
-        console.error("Erro ao buscar vendas da API:", erro);
-      }
-    }
+    void iniciar();
+  }, [carregarCadastros]);
 
-    async function buscarTransportadoras() {
-      try {
-        const resposta = await axios.get<unknown>(API_TRANSPORTADORAS_URL);
-        setTransportadorasCadastradas(normalizarTransportadoras(resposta.data));
-      } catch (erro) {
-        // Se a rota não existir, o campo continua como ID digitado
-        console.warn("Não foi possível carregar as transportadoras:", erro);
-      }
-    }
-
-    async function buscarFuncionarios() {
-      try {
-        const resposta = await axios.get<unknown>(API_FUNCIONARIOS_URL);
-        setFuncionariosCadastrados(normalizarFuncionarios(resposta.data));
-      } catch (erro) {
-        console.error("Erro ao buscar funcionários da API:", erro);
-        alert("Não foi possível carregar os funcionários. Confira a API de funcionários.");
-      }
-    }
-
-    async function buscarProdutos() {
-      setCarregandoProdutos(true);
-      try {
-        const resposta = await axios.get<unknown>(API_PRODUTOS_URL);
-        console.log("Produtos recebidos da API:", resposta.data);
-        const lista = normalizarProdutos(resposta.data);
-        setProdutosCadastrados(lista);
-        if (lista.length === 0) {
-          console.warn("Nenhum produto foi reconhecido na resposta da API:", resposta.data);
-        }
-      } catch (erro) {
-        console.error("Erro ao buscar produtos da API:", erro);
-        if (axios.isAxiosError(erro)) {
-          alert(`Não foi possível carregar os produtos. ${erro.response?.status ? `Código HTTP: ${erro.response.status}` : erro.message}`);
-        } else {
-          alert("Não foi possível carregar os produtos cadastrados.");
-        }
-      } finally {
-        setCarregandoProdutos(false);
-      }
-    }
-
-    void buscarClientes();
-    void buscarProximoPedido();
-    void buscarTransportadoras();
-    void buscarFuncionarios();
-    void buscarProdutos();
-  }, []);
+  function tentarNovamente() {
+    setErroCarregamento("");
+    void carregarCadastros();
+  }
 
   const clienteSelecionado = clientesCadastrados.find(
     (cliente) => cliente.id === Number(clienteSelecionadoId)
@@ -250,6 +436,21 @@ function Atendimento() {
     [itensPedido]
   );
   const totalPedido = Math.max(subtotalPedido - desconto + frete, 0);
+  const valoresParcelas = useMemo(
+    () => dividirEmParcelas(totalPedido, parcelas),
+    [parcelas, totalPedido],
+  );
+  const anoEmissao = Number(dataEmissao.slice(0, 4)) || new Date().getFullYear();
+  const permiteParcelamento =
+    formaPagamento === "cartao_credito" || formaPagamento === "boleto";
+
+  function alterarFormaPagamento(valor: string) {
+    setFormaPagamento(valor);
+
+    if (valor !== "cartao_credito" && valor !== "boleto") {
+      setParcelas(1);
+    }
+  }
 
   const quantidadeInvalida =
     quantidade < 1 || (estoqueSelecionado !== null && quantidade > estoqueSelecionado);
@@ -287,7 +488,7 @@ function Atendimento() {
       );
     } else {
       const novoItem: ItemPedido = {
-        id: Date.now(),
+        id: proximoItemId.current++,
         produtoId: produtoSelecionado.id,
         nome: produtoSelecionado.nome,
         codigo: produtoSelecionado.codigo,
@@ -318,6 +519,8 @@ function Atendimento() {
     setFuncionarioId("");
     setDataEmissao(hojeISO());
     setDataEntrega("");
+    setParcelas(1);
+    setObservacoes("");
   }
 
   async function finalizarPedido() {
@@ -341,8 +544,20 @@ function Atendimento() {
       alert("Informe um ID de transportadora válido.");
       return;
     }
-    if (dataEntrega && dataEmissao && dataEntrega < dataEmissao) {
+    if (!dataEmissao) {
+      alert("Informe a data de emissão.");
+      return;
+    }
+    if (dataEntrega && dataEntrega < dataEmissao) {
       alert("A data de entrega não pode ser anterior à data de emissão.");
+      return;
+    }
+    if (!Number.isInteger(parcelas) || parcelas < 1 || parcelas > 12) {
+      alert("O parcelamento deve ser entre 1 e 12 vezes.");
+      return;
+    }
+    if (desconto > subtotalPedido) {
+      alert("O desconto não pode ser maior que o subtotal dos itens.");
       return;
     }
     if (!Number.isFinite(totalPedido) || totalPedido <= 0) {
@@ -350,55 +565,123 @@ function Atendimento() {
       return;
     }
 
+    for (const item of itensPedido) {
+      const produto = produtosCadastrados.find(
+        (cadastrado) => cadastrado.id === item.produtoId,
+      );
+
+      if (
+        produto &&
+        produto.estoque !== null &&
+        item.quantidade > produto.estoque
+      ) {
+        alert(
+          `Estoque insuficiente para ${item.nome}: disponível ${produto.estoque} un.`,
+        );
+        return;
+      }
+    }
+
     try {
       setSalvando(true);
-      const respostaVenda = await axios.post(API_VENDAS_URL, {
-        id_status: "pendente",
-        cliente_id: clienteSelecionado.id,
-        transportadoras_id: Number(transportadoraId),
-        funcionarios_id: Number(funcionarioId),
+      setErroCarregamento("");
+
+      const respostaVenda = await apiRequest<unknown>(API_VENDAS_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          id_status: "pendente",
+          cliente_id: clienteSelecionado.id,
+          transportadoras_id: Number(transportadoraId),
+          funcionarios_id: Number(funcionarioId),
+        }),
       });
 
-      const venda = respostaVenda.data?.data ?? respostaVenda.data;
-      const vendaId = Number(venda?.id ?? venda?.venda?.id);
+      const corpoVenda = comoObjeto(respostaVenda);
+      const venda =
+        comoObjeto(corpoVenda?.data) ?? comoObjeto(corpoVenda?.venda) ?? corpoVenda;
+      const vendaId = Number(venda?.id);
       if (!Number.isFinite(vendaId) || vendaId <= 0) {
-        throw new Error("A API não retornou o ID da venda. Verifique a resposta do endpoint /vendas.");
+        throw new Error(
+          "A API não retornou o ID da venda. Verifique a resposta do endpoint /vendas.",
+        );
       }
 
-      // Registra cada produto do pedido ligado à venda criada
+      // Registra cada produto do pedido e a saída correspondente no estoque
       for (const item of itensPedido) {
-        await axios.post(API_ITENS_VENDA_URL, {
-          quantidade: item.quantidade,
-          preco: Number(item.precoUnitario.toFixed(2)),
-          vendas_id: vendaId,
-          produtos_id: item.produtoId,
+        await apiRequest<unknown>(API_ITENS_VENDA_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            quantidade: item.quantidade,
+            preco: Number(item.precoUnitario.toFixed(2)),
+            vendas_id: vendaId,
+            produtos_id: item.produtoId,
+          }),
+        });
+
+        await apiRequest<unknown>("/fluxo-caixa", {
+          method: "POST",
+          body: JSON.stringify({
+            tipo: "saida",
+            produto_id: item.produtoId,
+            quantidade: item.quantidade,
+            preco_unitario: Number(item.precoUnitario.toFixed(2)),
+            descricao: `Venda ${formatarCodigoPedido(vendaId, anoEmissao)} — ${clienteSelecionado.nome}`,
+            venda_id: vendaId,
+          }),
         });
       }
 
-      await axios.post(API_PAGAMENTOS_URL, {
-        metodo_pagamento: formaPagamento,
-        valo_pagamento: Number(totalPedido.toFixed(2)),
-        status_pagamento: formaPagamento === "boleto" ? "pendente" : "aprovado",
-        data_pagamento: hojeISO(),
-        vendas_id: vendaId,
+      // Cada parcela vira um pagamento com vencimento mensal a partir da emissão
+      const statusPagamento =
+        formaPagamento === "boleto" ? "pendente" : "aprovado";
+
+      for (const [indice, valor] of valoresParcelas.entries()) {
+        await apiRequest<unknown>(API_PAGAMENTOS_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            metodo_pagamento: formaPagamento,
+            valo_pagamento: valor,
+            status_pagamento: statusPagamento,
+            data_pagamento: somarMeses(dataEmissao, indice),
+            vendas_id: vendaId,
+          }),
+        });
+      }
+
+      const funcionario = funcionariosCadastrados.find(
+        (item) => item.id === Number(funcionarioId),
+      );
+      const transportadora = transportadorasCadastradas.find(
+        (item) => item.id === Number(transportadoraId),
+      );
+
+      setComprovante({
+        vendaId,
+        codigo: formatarCodigoPedido(vendaId, anoEmissao),
+        dataEmissao,
+        dataEntrega,
+        cliente: clienteSelecionado,
+        funcionarioNome: funcionario?.nome || `Funcionário #${funcionarioId}`,
+        transportadoraNome:
+          transportadora?.nome || `Transportadora #${transportadoraId}`,
+        itens: [...itensPedido],
+        subtotal: subtotalPedido,
+        desconto,
+        frete,
+        total: totalPedido,
+        formaPagamento,
+        parcelas: valoresParcelas,
+        observacoes: observacoes.trim(),
       });
 
-      alert(
-        `Pedido ${formatarCodigoPedido(vendaId)} registrado com sucesso!\nItens: ${itensPedido.length}\nFuncionário (ID): ${funcionarioId}\nTransportadora (ID): ${transportadoraId}`
-      );
       setProximoPedidoId(vendaId + 1);
       limparAtendimento();
+      void carregarCadastros();
     } catch (erro: unknown) {
       console.error("Erro ao registrar venda, itens ou pagamento:", erro);
-      if (axios.isAxiosError(erro)) {
-        const dadosErro = erro.response?.data as any;
-        const mensagemApi = typeof dadosErro === "string"
-          ? dadosErro
-          : dadosErro?.message || dadosErro?.mensagem || dadosErro?.error;
-        alert(`A API não conseguiu concluir a operação.\n\n${mensagemApi || erro.message}\nCódigo HTTP: ${erro.response?.status ?? "sem resposta do servidor"}\n\nConfira se o ID da transportadora existe na API.`);
-      } else {
-        alert(`Não foi possível concluir a operação: ${erro instanceof Error ? erro.message : "Erro inesperado."}`);
-      }
+      alert(
+        `${descreverErro(erro)}\n\nSe o pedido foi criado, alguma parcela pode não ter sido gravada. Confira em Pagamentos antes de repetir.`,
+      );
     } finally {
       setSalvando(false);
     }
@@ -415,6 +698,22 @@ function Atendimento() {
           <span className="atendimento-status medium-h3">Em preenchimento</span>
         </div>
 
+        {erroCarregamento && (
+          <div className="atendimento-aviso atendimento-aviso-erro" role="alert">
+            <div>
+              <strong className="medium-h3">{erroCarregamento}</strong>
+              <small>Servidor: {API_BASE_URL}</small>
+            </div>
+            <button
+              type="button"
+              className="atendimento-aviso-acao"
+              onClick={tentarNovamente}
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
         <div className="atendimento-secao">
           <h2 className="medium-h2">Informações do pedido</h2>
           <div className="atendimento-grid atendimento-grid-quatro">
@@ -422,7 +721,7 @@ function Atendimento() {
               <label className="medium-h3">Código do pedido</label>
               <input
                 type="text"
-                value={proximoPedidoId !== null ? formatarCodigoPedido(proximoPedidoId) : "Carregando..."}
+                value={proximoPedidoId !== null ? formatarCodigoPedido(proximoPedidoId, anoEmissao) : "Carregando..."}
                 readOnly
               />
             </div>
@@ -436,12 +735,19 @@ function Atendimento() {
             </div>
             <div className="atendimento-campo">
               <label className="medium-h3" htmlFor="funcionario">ID do funcionário</label>
-              <select id="funcionario" value={funcionarioId} onChange={(evento) => setFuncionarioId(evento.target.value)}>
-                <option value="">Selecione o ID do funcionário</option>
-                {funcionariosCadastrados.map((funcionario) => (
-                  <option key={funcionario.id} value={funcionario.id}>{funcionario.id} — {funcionario.nome}</option>
-                ))}
-              </select>
+              {funcionariosCadastrados.length > 0 ? (
+                <select id="funcionario" value={funcionarioId} onChange={(evento) => setFuncionarioId(evento.target.value)}>
+                  <option value="">Selecione o ID do funcionário</option>
+                  {funcionariosCadastrados.map((funcionario) => (
+                    <option key={funcionario.id} value={funcionario.id}>{funcionario.id} — {funcionario.nome}</option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input id="funcionario" type="number" min="1" value={funcionarioId} onChange={(evento) => setFuncionarioId(evento.target.value)} placeholder="ID do funcionário" />
+                  <small className="atendimento-dica">Nenhum funcionário retornado pela API; informe o ID manualmente.</small>
+                </>
+              )}
             </div>
             <div className="atendimento-campo">
               <label className="medium-h3" htmlFor="transportadora">ID da transportadora</label>
@@ -490,15 +796,24 @@ function Atendimento() {
             <div className="atendimento-campo">
               <label className="medium-h3" htmlFor="produto">Produto</label>
               <select id="produto" value={produtoSelecionadoId} onChange={(evento) => setProdutoSelecionadoId(evento.target.value)} disabled={carregandoProdutos}>
-                <option value="">{carregandoProdutos ? "Carregando produtos..." : produtosCadastrados.length === 0 ? "Nenhum produto cadastrado" : "Selecione um produto"}</option>
+                <option value="">{carregandoProdutos ? "Carregando produtos..." : produtosCadastrados.length === 0 ? "Nenhum produto cadastrado na API" : "Selecione um produto"}</option>
                 {produtosCadastrados.map((produto) => (
                   <option key={produto.id} value={produto.id} disabled={produto.estoque !== null && produto.estoque <= 0}>
                     {produto.nome} — {formatarDinheiro(produto.preco)}
-                    {produto.estoque !== null ? ` (estoque: ${produto.estoque})` : ""}
+                    {produto.estoque === null ? "" : produto.estoque > 0 ? ` (estoque: ${produto.estoque})` : " (sem estoque)"}
                   </option>
                 ))}
               </select>
-              {!carregandoProdutos && produtosCadastrados.length === 0 && <small>Verifique o retorno do GET /produtos no Console do navegador.</small>}
+              {!carregandoProdutos && produtosCadastrados.length === 0 && (
+                <small className="atendimento-dica">
+                  A API {API_BASE_URL} não retornou produtos. Cadastre um produto ou ajuste VITE_API_URL.
+                </small>
+              )}
+              {!carregandoProdutos && produtosCadastrados.length > 0 && produtosCadastrados.every((produto) => produto.estoque !== null && produto.estoque <= 0) && (
+                <small className="atendimento-dica">
+                  Todos os produtos estão sem estoque. Reponha no Inventário para poder vender.
+                </small>
+              )}
             </div>
             <div className="atendimento-campo">
               <label className="medium-h3">Código</label>
@@ -550,27 +865,58 @@ function Atendimento() {
             <div className="atendimento-grid atendimento-grid-dois">
               <div className="atendimento-campo">
                 <label className="medium-h3">Forma de pagamento</label>
-                <select value={formaPagamento} onChange={(evento) => setFormaPagamento(evento.target.value)}>
+                <select value={formaPagamento} onChange={(evento) => alterarFormaPagamento(evento.target.value)}>
                   <option value="" disabled>Selecione</option>
                   <option value="pix">Pix</option><option value="dinheiro">Dinheiro</option><option value="cartao_credito">Cartão de crédito</option><option value="cartao_debito">Cartão de débito</option><option value="boleto">Boleto</option>
                 </select>
               </div>
               <div className="atendimento-campo">
-                <label className="medium-h3">Parcelamento</label>
-                <select defaultValue="1"><option value="1">À vista</option><option value="2">2 parcelas</option><option value="3">3 parcelas</option><option value="4">4 parcelas</option><option value="5">5 parcelas</option><option value="6">6 parcelas</option></select>
+                <label className="medium-h3" htmlFor="parcelamento">Parcelamento</label>
+                <select
+                  id="parcelamento"
+                  value={parcelas}
+                  disabled={!permiteParcelamento}
+                  onChange={(evento) => setParcelas(Number(evento.target.value))}
+                >
+                  {Array.from({ length: 12 }, (_, indice) => indice + 1).map((opcao) => {
+                    const valor = dividirEmParcelas(totalPedido, opcao)[0] ?? 0;
+                    const rotulo =
+                      opcao === 1
+                        ? `À vista — ${formatarDinheiro(totalPedido)}`
+                        : `${opcao}x de ${formatarDinheiro(valor)}`;
+
+                    return (
+                      <option key={opcao} value={opcao}>
+                        {rotulo}
+                      </option>
+                    );
+                  })}
+                </select>
+                {!permiteParcelamento && (
+                  <small className="atendimento-dica">
+                    Parcelamento disponível apenas para cartão de crédito e boleto.
+                  </small>
+                )}
               </div>
             </div>
             <div className="atendimento-campo">
-              <label className="medium-h3">Observações</label>
-              <textarea rows={4} placeholder="Informações adicionais do pedido ou da nota fiscal" />
+              <label className="medium-h3" htmlFor="observacoes">Observações</label>
+              <textarea
+                id="observacoes"
+                rows={4}
+                value={observacoes}
+                onChange={(evento) => setObservacoes(evento.target.value)}
+                placeholder="Informações adicionais do pedido ou da nota fiscal"
+              />
             </div>
           </div>
 
           <aside className="atendimento-resumo">
             <h2 className="medium-h2">Resumo do pedido</h2>
             <div className="atendimento-resumo-linha"><span className="light-h3">Subtotal</span><strong className="medium-h3">{formatarDinheiro(subtotalPedido)}</strong></div>
-            <div className="atendimento-resumo-campo"><label className="light-h3">Desconto</label><input type="number" min="0" value={desconto} onChange={(evento) => setDesconto(Math.max(0, Number(evento.target.value)))} /></div>
-            <div className="atendimento-resumo-campo"><label className="light-h3">Frete</label><input type="number" min="0" value={frete} onChange={(evento) => setFrete(Math.max(0, Number(evento.target.value)))} /></div>
+            <div className="atendimento-resumo-campo"><label className="light-h3" htmlFor="desconto">Desconto</label><input id="desconto" type="number" min="0" step="0.01" value={desconto} onChange={(evento) => setDesconto(paraValorMonetario(evento.target.value))} /></div>
+            <div className="atendimento-resumo-campo"><label className="light-h3" htmlFor="frete">Frete</label><input id="frete" type="number" min="0" step="0.01" value={frete} onChange={(evento) => setFrete(paraValorMonetario(evento.target.value))} /></div>
+            <div className="atendimento-resumo-linha"><span className="light-h3">Parcelas</span><strong className="medium-h3">{parcelas === 1 ? "À vista" : `${parcelas}x de ${formatarDinheiro(valoresParcelas[0] ?? 0)}`}</strong></div>
             <div className="atendimento-resumo-total"><span className="medium-h2">Total</span><strong className="bold-h1">{formatarDinheiro(totalPedido)}</strong></div>
           </aside>
         </div>
@@ -584,6 +930,119 @@ function Atendimento() {
           </div>
         </div>
       </div>
+
+      {comprovante && (
+        <div className="atendimento-comprovante-fundo">
+          <article
+            className="atendimento-comprovante"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="comprovante-titulo"
+          >
+            <header className="atendimento-comprovante-cabecalho">
+              <div>
+                <h2 id="comprovante-titulo" className="medium-h2">Comprovante do pedido</h2>
+                <p className="light-h3">
+                  {comprovante.codigo} · emitido em {formatarDataBr(comprovante.dataEmissao)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="atendimento-comprovante-fechar"
+                onClick={() => setComprovante(null)}
+                aria-label="Fechar comprovante"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="atendimento-comprovante-dados">
+              <div>
+                <span className="light-h3">Cliente</span>
+                <strong className="medium-h3">{comprovante.cliente.nome}</strong>
+                <small>{comprovante.cliente.cpf || "CPF não informado"}</small>
+                <small>{comprovante.cliente.contato || "Telefone não informado"}</small>
+              </div>
+              <div>
+                <span className="light-h3">Entrega</span>
+                <strong className="medium-h3">{formatarDataBr(comprovante.dataEntrega)}</strong>
+                <small>{comprovante.transportadoraNome}</small>
+              </div>
+              <div>
+                <span className="light-h3">Responsável</span>
+                <strong className="medium-h3">{comprovante.funcionarioNome}</strong>
+                <small>Venda #{comprovante.vendaId}</small>
+              </div>
+            </div>
+
+            <div className="atendimento-comprovante-tabela-container">
+              <table className="atendimento-comprovante-tabela">
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th>Código</th>
+                    <th>Qtd.</th>
+                    <th>Unitário</th>
+                    <th>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comprovante.itens.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.nome}</td>
+                      <td>{item.codigo}</td>
+                      <td>{item.quantidade}</td>
+                      <td>{formatarDinheiro(item.precoUnitario)}</td>
+                      <td>{formatarDinheiro(item.subtotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="atendimento-comprovante-totais">
+              <div><span>Subtotal</span><strong>{formatarDinheiro(comprovante.subtotal)}</strong></div>
+              <div><span>Desconto</span><strong>− {formatarDinheiro(comprovante.desconto)}</strong></div>
+              <div><span>Frete</span><strong>{formatarDinheiro(comprovante.frete)}</strong></div>
+              <div className="atendimento-comprovante-total"><span>Total</span><strong>{formatarDinheiro(comprovante.total)}</strong></div>
+            </div>
+
+            <div className="atendimento-comprovante-pagamento">
+              <span className="light-h3">
+                Pagamento · {ROTULOS_PAGAMENTO[comprovante.formaPagamento] ?? comprovante.formaPagamento}
+              </span>
+              <ul>
+                {comprovante.parcelas.map((valor, indice) => (
+                  <li key={indice}>
+                    <span>
+                      {comprovante.parcelas.length > 1
+                        ? `${indice + 1}/${comprovante.parcelas.length} — vencimento ${formatarDataBr(somarMeses(comprovante.dataEmissao, indice))}`
+                        : "À vista"}
+                    </span>
+                    <strong>{formatarDinheiro(valor)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {comprovante.observacoes && (
+              <div className="atendimento-comprovante-observacoes">
+                <span className="light-h3">Observações</span>
+                <p>{comprovante.observacoes}</p>
+              </div>
+            )}
+
+            <footer className="atendimento-comprovante-acoes">
+              <button type="button" className="atendimento-comprovante-fechar-texto" onClick={() => setComprovante(null)}>
+                Fechar
+              </button>
+              <button type="button" className="atendimento-comprovante-imprimir" onClick={() => window.print()}>
+                Imprimir
+              </button>
+            </footer>
+          </article>
+        </div>
+      )}
     </section>
   );
 }
