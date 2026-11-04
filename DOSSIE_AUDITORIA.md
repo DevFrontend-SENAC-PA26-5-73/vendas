@@ -27,7 +27,7 @@ O projeto tem telas úteis para clientes, produtos, cargos, atendimento e estoqu
 
 ### P1 — Necessários para completar os requisitos
 
-4. **Fornecedores e transportadoras seguem sem fluxo funcional.** Funcionário agora pode ser aberto pelo menu. Fornecedores ainda mostra “Esta tela ainda não foi criada” em [App.tsx](src/App.tsx). Atendimento exige uma transportadora, mas o contrato fornecido não documenta rota para listá-la.
+4. **Fornecedores e transportadoras seguem sem fluxo funcional.** Funcionário pode ser aberto pelo menu. Fornecedores está acessível no menu e na pesquisa, mas ainda mostra “Esta tela ainda não foi criada” em [App.tsx](src/App.tsx). Atendimento exige uma transportadora, mas o contrato fornecido não documenta rota para listá-la.
 5. **Métricas indisponíveis no dashboard.** Corrigido no front-end: despesas, lucro, variações e origens ausentes agora são mostrados como indisponíveis, sem inventar zeros; o gráfico identifica pagamentos históricos em vez de chamá-los previsão. Previsão real ainda depende de dados e regra do backend. Ver [Dashboard.tsx](src/components/Dashboard/Dashboard.tsx).
 6. **Frete, desconto, emissão e dados de endereço não fecham o ciclo.** O frete é digitado manualmente, não considera peso/endereço e não é persistido pela venda; o comprovante impresso não é NF-e/NFS-e. O CEP serve apenas para consulta do ViaCEP e bairro/CEP não fazem parte do payload de cliente. Ver [Clientes.tsx](src/components/Clientes/Clientes.tsx) e [Atendimento.tsx](src/components/Atendimento/Atendimento.tsx).
 7. **Layout responsivo do shell.** Corrigido no front-end: em telas estreitas, a navegação vira uma faixa horizontal e o conteúdo ocupa a largura disponível. Validar visualmente em dispositivos reais ainda faz parte da etapa de testes.
@@ -70,7 +70,7 @@ O projeto tem telas úteis para clientes, produtos, cargos, atendimento e estoqu
 
 ### Etapa 2 — Completar o fluxo operacional
 
-- A navegação de Funcionários foi adicionada; decidir escopo e implementar Fornecedores.
+- A navegação de Funcionários foi adicionada; Fornecedores está acessível pelo menu, mas ainda requer tela, integração com API e definição de escopo.
 - Implementar devolução com vínculo à venda/item e regras de reposição/estorno.
 - Definir tabelas de preço e suporte a serviços, se confirmados no escopo.
 - Definir cálculo de frete com peso, endereço e transportadora; persistir os valores e a memória de cálculo.

@@ -146,6 +146,30 @@
   box-shadow: 0 0 0 2px rgb(117 252 150 / 45%);
 }
 
+.menu-lateral .menu-config {
+  width: 100%;
+  min-height: 42px;
+  height: auto;
+  padding: 0 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+
+  color: var(--b);
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h2);
+  font-weight: var(--weight-medium);
+  text-align: left;
+}
+
+.menu-lateral .menu-config svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
 /* Barra de rolagem */
 
 .menu-lateral::-webkit-scrollbar {

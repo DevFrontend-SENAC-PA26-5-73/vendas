@@ -3,6 +3,7 @@ import { lazy, Suspense, useState } from "react";
 import "./App.css";
 
 import Cabecalho from "./components/Cabecalho/Cabecalho";
+import Configuracao from "./components/Configuracao/Configuracao";
 import MenuLateral from "./components/MenuLateral/MenuLateral";
 
 const Dashboard = lazy(() => import("./components/Dashboard/Dashboard"));
@@ -33,6 +34,10 @@ function App() {
 
       case "Clientes":
         return <Clientes buscaGlobal={buscaGlobal} />;
+
+      case "Configuração":
+      case "Configuracao":
+        return <Configuracao />;
 
       case "Fornecedores":
         return (
