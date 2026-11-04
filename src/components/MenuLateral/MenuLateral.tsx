@@ -8,7 +8,7 @@ const gruposMenu = [
   },
   {
     titulo: "Cadastro",
-    itens: ["Clientes", "Produtos", "Funcionário", "Cargo"],
+    itens: ["Clientes", "Produtos", "Funcionário", "Cargo", "Fornecedores"],
   },
   {
     titulo: "Estoque",
@@ -63,6 +63,7 @@ function MenuLateral({
           onClick={() => aoMudarPagina("Configuração")}
         >
           <IconeEngrenagem />
+          <span>Configuração</span>
         </button>
       </div>
     </aside>
