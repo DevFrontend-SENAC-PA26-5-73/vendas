@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Heart, ShoppingCart, User, Search } from "lucide-react";
+import { Heart, Search, ShoppingCart, User } from "lucide-react";
 
 import "./Cabecalho.css";
-import { lerIdentidade } from "../Configuracao/useIdentidade";
-
-type CabecalhoProps = {
-    busca: string;
-    aoAlterarBusca: (busca: string) => void;
-};
-
-function Cabecalho({ busca, aoAlterarBusca }: CabecalhoProps){
-    return (
-        <div className="container">
+import {
+  lerIdentidade,
+  type Identidade,
+} from "../Configuracao/useIdentidade";
 
 type Props = {
+  busca: string;
+  aoAlterarBusca: (busca: string) => void;
   aoMudarPagina: (pagina: string) => void;
 };
 
@@ -28,15 +24,10 @@ type Resultado = {
 
 const API = "https://vendas.gabrielpimentel.com.br";
 
-                <input
-                    className="pesquisa"
-                    type="search"
-                    value={busca}
-                    onChange={(evento) => aoAlterarBusca(evento.target.value)}
-                    placeholder="Pesquisar nesta tela..."
-                    aria-label="Pesquisar na tela atual"
-                />
-
+function extrairLista(
+  dados: unknown,
+  chaves: string[],
+): Record<string, unknown>[] {
   if (Array.isArray(dados)) {
     return dados as Record<string, unknown>[];
   }
@@ -107,12 +98,14 @@ function correspondePesquisa(
 }
 
 // COMPONENTE CABEÇALHO
-function Cabecalho({ aoMudarPagina }: Props) {
+function Cabecalho({
+  busca,
+  aoAlterarBusca,
+  aoMudarPagina,
+}: Props) {
 
   const [identidade, setIdentidade] =
     useState<Identidade>(lerIdentidade);
-
-  const [termo, setTermo] = useState("");
 
   const [resultados, setResultados] =
     useState<Resultado[]>([]);
@@ -456,7 +449,7 @@ function Cabecalho({ aoMudarPagina }: Props) {
 
   const encontrados = useMemo(() => {
 
-    if (!termo.trim()) {
+    if (!busca.trim()) {
       return [];
     }
 
@@ -465,13 +458,13 @@ function Cabecalho({ aoMudarPagina }: Props) {
       .filter((resultado) =>
         correspondePesquisa(
           resultado.pesquisa,
-          termo
+          busca
         )
       )
 
       .slice(0, 10);
 
-  }, [termo, resultados]);
+  }, [busca, resultados]);
 
 
   // =================================
@@ -482,7 +475,7 @@ function Cabecalho({ aoMudarPagina }: Props) {
 
     aoMudarPagina(resultado.pagina);
 
-    setTermo("");
+    aoAlterarBusca("");
 
     setAberto(false);
 
@@ -492,7 +485,7 @@ function Cabecalho({ aoMudarPagina }: Props) {
   // LIMPAR PESQUISA
   function limparPesquisa() {
 
-    setTermo("");
+    aoAlterarBusca("");
 
     setAberto(false);
 
@@ -545,11 +538,11 @@ function Cabecalho({ aoMudarPagina }: Props) {
 
             placeholder="Pesquisar telas, produtos, clientes e pedidos..."
 
-            value={termo}
+            value={busca}
 
             onChange={(e) => {
 
-              setTermo(e.target.value);
+              aoAlterarBusca(e.target.value);
 
               setAberto(true);
 
@@ -578,7 +571,7 @@ function Cabecalho({ aoMudarPagina }: Props) {
 
 
           {/* RESULTADOS */}
-          {termo.trim() !== "" && aberto && (
+          {busca.trim() !== "" && aberto && (
 
             <div className="pesquisa-resultados">
 
