@@ -4,10 +4,14 @@ import { Heart, ShoppingCart, User, Search } from "lucide-react";
 import "./Cabecalho.css";
 import { lerIdentidade } from "../Configuracao/useIdentidade";
 
-type Identidade = {
-  nome: string;
-  logo: string;
+type CabecalhoProps = {
+    busca: string;
+    aoAlterarBusca: (busca: string) => void;
 };
+
+function Cabecalho({ busca, aoAlterarBusca }: CabecalhoProps){
+    return (
+        <div className="container">
 
 type Props = {
   aoMudarPagina: (pagina: string) => void;
@@ -24,11 +28,14 @@ type Resultado = {
 
 const API = "https://vendas.gabrielpimentel.com.br";
 
-// EXTRAIR LISTAS DA API
-function extrairLista(
-  dados: unknown,
-  chaves: string[]
-): Record<string, unknown>[] {
+                <input
+                    className="pesquisa"
+                    type="search"
+                    value={busca}
+                    onChange={(evento) => aoAlterarBusca(evento.target.value)}
+                    placeholder="Pesquisar nesta tela..."
+                    aria-label="Pesquisar na tela atual"
+                />
 
   if (Array.isArray(dados)) {
     return dados as Record<string, unknown>[];

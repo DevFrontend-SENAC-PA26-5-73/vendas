@@ -1,56 +1,32 @@
-import { useCallback, useEffect, useMemo, useState,} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+
+import { apiRequest, descreverErro } from "../../lib/api";
+import type {
+  MovimentacaoEstoque,
+  MovimentacaoPayload,
+  Produto,
+  TipoMovimentacao,
+} from "../../types/api";
+import {
+  lerMargensCategoriasProdutos,
+  normalizarCategoriaProduto,
+} from "../../lib/margensProdutos";
+import SortableHeader from "../SortableHeader/SortableHeader";
+import { ordenarLista } from "../../lib/ordenacao";
+import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 
 import "./Movimentacao.css";
 
-const API_URL = "http://10.3.20.30:5001";
-const CHAVE_HISTORICO = "historico-movimentacoes-estoque";
-
 /* =========================
-   Tipos
+   Tipos locais
 ========================= */
-  
-type TipoMovimentacao = "entrada" | "saida";
 
-type Produto = {
-  id: number;
-  nome: string;
-  quantidade: number;
-  tipo: string;
-  preco: number;
-};
-
-type ItemVenda = {
-  id: number;
-  quantidade: number;
-  preco: number;
-  vendas_id: number;
-  produtos_id: number;
-};
-
-type Pagamento = {
-  id: number;
-  vendas_id: number;
-  data_pagamento?: string;
-};
-
-type FormularioEntrada = {
+type FormularioMovimentacao = {
   produto_id: string;
   quantidade: string;
+  preco_unitario: string;
   descricao: string;
-  data_movimentacao: string;
-};
-
-type MovimentacaoVisual = {
-  id: string;
-  tipo: TipoMovimentacao;
-  produto_id: number;
-  quantidade: number;
-  preco_unitario: number;
-  descricao: string;
-  data_movimentacao?: string;
-  venda_id?: number;
 };
 
 type Mensagem = {
@@ -58,56 +34,20 @@ type Mensagem = {
   texto: string;
 };
 
-type RespostaErroApi = {
-  message?: string | string[];
-};
+type ColunaOrdenacaoMovimento =
+  | "tipo" | "produto" | "categoria" | "descricao" | "data"
+  | "venda" | "quantidade" | "unitario" | "total";
 
-function obterDataAtual() {
-  const agora = new Date();
-  const mes = String(agora.getMonth() + 1).padStart(2, "0");
-  const dia = String(agora.getDate()).padStart(2, "0");
-  return `${agora.getFullYear()}-${mes}-${dia}`;
-}
-
-const formularioInicial: FormularioEntrada = {
+const formularioInicial: FormularioMovimentacao = {
   produto_id: "",
   quantidade: "1",
+  preco_unitario: "",
   descricao: "",
-  data_movimentacao: obterDataAtual(),
 };
 
-function carregarHistoricoLocal(): MovimentacaoVisual[] {
-  try {
-    const valor = localStorage.getItem(CHAVE_HISTORICO);
-    if (!valor) return [];
-
-    const dados: unknown = JSON.parse(valor);
-    if (!Array.isArray(dados)) return [];
-
-    return dados.filter((item): item is MovimentacaoVisual => {
-      if (!item || typeof item !== "object") return false;
-      const entrada = item as Partial<MovimentacaoVisual>;
-
-      return (
-        typeof entrada.id === "string" &&
-        entrada.tipo === "entrada" &&
-        typeof entrada.produto_id === "number" &&
-        typeof entrada.quantidade === "number"
-      );
-    });
-  } catch (erro) {
-    console.error("Erro ao carregar histórico local:", erro);
-    return [];
-  }
-}
-
-function salvarHistoricoLocal(entradas: MovimentacaoVisual[]) {
-  try {
-    localStorage.setItem(CHAVE_HISTORICO, JSON.stringify(entradas));
-  } catch (erro) {
-    console.error("Erro ao salvar histórico local:", erro);
-  }
-}
+/* =========================
+   Utilitários
+========================= */
 
 function formatarNumero(valor: number) {
   return Number(valor || 0).toLocaleString("pt-BR", {
@@ -141,280 +81,233 @@ function formatarData(data?: string) {
   });
 }
 
-
-function obterProduto(produtoId: number, produtos: Produto[]) {
-  return produtos.find((produto) => produto.id === produtoId);
+function descricaoPadrao() {
+  return "Entrada de estoque";
 }
 
-async function lerResposta(resposta: Response): Promise<unknown> {
-  const texto = await resposta.text();
-  if (!texto) return null;
+/* =========================
+   Componente
+========================= */
 
-  try {
-    return JSON.parse(texto);
-  } catch {
-    return texto;
-  }
-}
-
-function obterMensagemErro(dados: unknown, status: number) {
-  if (dados && typeof dados === "object" && "message" in dados) {
-    const mensagem = (dados as RespostaErroApi).message;
-    if (Array.isArray(mensagem)) return mensagem.join(", ");
-    if (typeof mensagem === "string") return mensagem;
-  }
-
-  if (typeof dados === "string" && dados.trim()) return dados;
-  return `Erro HTTP ${status}`;
-}
-
-
-function Movimentacao() {
-  const [formulario, setFormulario] = useState<FormularioEntrada>({
-    ...formularioInicial,
-  });
+function Movimentacao({ buscaGlobal }: { buscaGlobal: string }) {
   const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [estoque, setEstoque] = useState<Produto[]>([]);
-  const [itensVenda, setItensVenda] = useState<ItemVenda[]>([]);
-  const [entradasSalvas, setEntradasSalvas] =
-    useState<MovimentacaoVisual[]>(carregarHistoricoLocal);
-  const [entradaEmEdicao, setEntradaEmEdicao] =
-    useState<string | null>(null);
+  const [margensCategorias] = useState(lerMargensCategoriasProdutos);
+  const [movimentacoes, setMovimentacoes] = useState<MovimentacaoEstoque[]>([]);
+  const [formulario, setFormulario] =
+    useState<FormularioMovimentacao>(formularioInicial);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<Mensagem | null>(null);
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] =
     useState<"todos" | TipoMovimentacao>("todos");
+  const [ordenacao, setOrdenacao] = useState<{
+    coluna: ColunaOrdenacaoMovimento;
+    direcao: DirecaoOrdenacao;
+  } | null>(null);
 
   const produtoSelecionado = useMemo(() => {
     const id = Number(formulario.produto_id);
     return id ? produtos.find((produto) => produto.id === id) : undefined;
   }, [formulario.produto_id, produtos]);
 
-  const precoUnitario = Number(produtoSelecionado?.preco ?? 0);
-  const categoriaProduto = produtoSelecionado?.tipo ?? "Selecione um produto";
+  const estoqueDisponivel = Number(produtoSelecionado?.quantidade ?? 0);
+  const margemMinima = produtoSelecionado
+    ? margensCategorias[
+        normalizarCategoriaProduto(produtoSelecionado.tipo ?? "")
+      ]
+    : undefined;
   const quantidadeInformada = Number(formulario.quantidade || 0);
+  const custoUnitario = Number(produtoSelecionado?.preco ?? 0);
+  const precoVendaMinimo =
+    margemMinima === undefined || custoUnitario <= 0
+      ? null
+      : Number(
+          (custoUnitario * (1 + margemMinima / 100)).toFixed(2),
+        );
   const valorTotalFormulario = Number(
-    (quantidadeInformada * precoUnitario).toFixed(2),
+    (quantidadeInformada * custoUnitario).toFixed(2),
   );
 
-  const totalUnidadesEstoque = useMemo(
-    () =>
-      estoque.reduce(
-        (total, produto) => total + Number(produto.quantidade || 0),
-        0,
-      ),
-    [estoque],
-  );
+  const produtosPorId = useMemo(() => {
+    const mapa = new Map<number, Produto>();
+    produtos.forEach((produto) => mapa.set(produto.id, produto));
+    return mapa;
+  }, [produtos]);
 
-  const totalUnidadesVendidas = useMemo(
-    () =>
-      itensVenda.reduce(
-        (total, item) => total + Number(item.quantidade || 0),
-        0,
-      ),
-    [itensVenda],
-  );
+  /** Resumo calculado a partir do próprio razão, para ficar igual à tabela. */
+  const resumo = useMemo(() => {
+    let entradas = 0;
+    let saidas = 0;
+    let unidadesEntrada = 0;
+    let unidadesSaida = 0;
 
-  const saidasAtendimento = useMemo<MovimentacaoVisual[]>(
-    () =>
-      itensVenda.map((item) => ({
-        id: `saida-${item.id}`,
-        tipo: "saida",
-        produto_id: item.produtos_id,
-        quantidade: Number(item.quantidade || 0),
-        preco_unitario: Number(Number(item.preco || 0).toFixed(2)),
-        descricao: `Saída gerada pela venda #${item.vendas_id}`,
-        venda_id: item.vendas_id,
-      })),
-    [itensVenda],
-  );
+    for (const movimentacao of movimentacoes) {
+      const quantidade = Number(movimentacao.quantidade || 0);
+      const valor = quantidade * Number(movimentacao.preco_unitario || 0);
 
-  const historicoCompleto = useMemo(
-    () => [...entradasSalvas, ...saidasAtendimento],
-    [entradasSalvas, saidasAtendimento],
-  );
+      if (movimentacao.tipo === "entrada") {
+        entradas += valor;
+        unidadesEntrada += quantidade;
+      } else {
+        saidas += valor;
+        unidadesSaida += quantidade;
+      }
+    }
+
+    return {
+      entradas,
+      saidas,
+      saldo: entradas - saidas,
+      unidadesEntrada,
+      unidadesSaida,
+    };
+  }, [movimentacoes]);
 
   const historicoFiltrado = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+    const termos = [busca, buscaGlobal]
+      .map((valor) => valor
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase(),
+      )
+      .filter(Boolean);
 
-    return historicoCompleto.filter((movimentacao) => {
-      const produto = obterProduto(movimentacao.produto_id, produtos);
-      const texto = [produto?.nome, produto?.tipo, movimentacao.descricao]
-        .filter(Boolean)
-        .join(" ")
+    return [...movimentacoes]
+      .sort((a, b) => (b.data ?? "").localeCompare(a.data ?? ""))
+      .filter((movimentacao) => {
+        const produto = produtosPorId.get(movimentacao.produto_id);
+        const texto = [
+          movimentacao.id,
+          movimentacao.produto_id,
+          produto?.nome,
+          produto?.tipo,
+          movimentacao.descricao,
+          movimentacao.venda_id ? `venda ${movimentacao.venda_id}` : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
 
-      return (
-        (filtroTipo === "todos" || movimentacao.tipo === filtroTipo) &&
-        (!termo || texto.includes(termo))
-      );
-    });
-  }, [busca, filtroTipo, historicoCompleto, produtos]);
-
-  const carregarDados = useCallback(async () => {
-    try {
-      setCarregando(true);
-      setMensagem(null);
-
-      const [respostaProdutos, respostaEstoque, respostaItens] =
-        await Promise.all([
-          fetch(`${API_URL}/produtos`),
-          fetch(`${API_URL}/estoque`),
-          fetch(`${API_URL}/itemvenda`),
-        ]);
-
-      if (!respostaProdutos.ok) {
-        throw new Error("Não foi possível carregar os produtos.");
-      }
-
-      const dadosProdutos: unknown = await respostaProdutos.json();
-      setProdutos(Array.isArray(dadosProdutos) ? (dadosProdutos as Produto[]) : []);
-
-      if (respostaEstoque.ok) {
-        const dadosEstoque: unknown = await respostaEstoque.json();
-        setEstoque(Array.isArray(dadosEstoque) ? (dadosEstoque as Produto[]) : []);
-      } else {
-        setEstoque([]);
-      }
-
-      if (respostaItens.ok) {
-        const dadosItens: unknown = await respostaItens.json();
-        setItensVenda(Array.isArray(dadosItens) ? (dadosItens as ItemVenda[]) : []);
-      } else {
-        setItensVenda([]);
-      }
-    } catch (erro) {
-      console.error("Erro ao carregar dados:", erro);
-      setMensagem({
-        tipo: "erro",
-        texto:
-          erro instanceof Error
-            ? erro.message
-            : "Não foi possível carregar os dados.",
+        return (
+          (filtroTipo === "todos" || movimentacao.tipo === filtroTipo) &&
+          termos.every((termo) => texto.includes(termo))
+        );
       });
+  }, [busca, buscaGlobal, filtroTipo, movimentacoes, produtosPorId]);
+
+  const historicoOrdenado = useMemo(() => {
+    if (!ordenacao) return historicoFiltrado;
+    return ordenarLista(
+      historicoFiltrado,
+      (movimentacao) => {
+        const produto = produtosPorId.get(movimentacao.produto_id);
+        switch (ordenacao.coluna) {
+          case "tipo": return movimentacao.tipo;
+          case "produto": return produto?.nome ?? movimentacao.produto?.nome ?? `Produto ${movimentacao.produto_id}`;
+          case "categoria": return produto?.tipo ?? "Não informada";
+          case "descricao": return movimentacao.descricao;
+          case "data": return new Date(movimentacao.data).getTime() || 0;
+          case "venda": return movimentacao.venda_id ?? 0;
+          case "quantidade": return Number(movimentacao.quantidade || 0);
+          case "unitario": return Number(movimentacao.preco_unitario || 0);
+          case "total": return Number(movimentacao.quantidade || 0) * Number(movimentacao.preco_unitario || 0);
+        }
+      },
+      ordenacao.direcao,
+    );
+  }, [historicoFiltrado, ordenacao, produtosPorId]);
+
+  function alternarOrdenacao(coluna: ColunaOrdenacaoMovimento) {
+    setOrdenacao((atual) => ({
+      coluna,
+      direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
+    }));
+  }
+
+  const carregarDados = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const [listaProdutos, listaMovimentacoes] = await Promise.all([
+        apiRequest<Produto[]>("/produtos", { signal }),
+        apiRequest<MovimentacaoEstoque[]>("/fluxo-caixa", { signal }),
+      ]);
+
+      if (signal?.aborted) return;
+
+      setProdutos(Array.isArray(listaProdutos) ? listaProdutos : []);
+      setMovimentacoes(
+        Array.isArray(listaMovimentacoes) ? listaMovimentacoes : [],
+      );
+    } catch (erro) {
+      if (signal?.aborted) return;
+      setMensagem({ tipo: "erro", texto: descreverErro(erro) });
     } finally {
-      setCarregando(false);
+      if (!signal?.aborted) setCarregando(false);
     }
   }, []);
 
   useEffect(() => {
-    void carregarDados();
+    const controller = new AbortController();
+
+    async function iniciar() {
+      await carregarDados(controller.signal);
+    }
+
+    void iniciar();
+    return () => controller.abort();
   }, [carregarDados]);
 
-  useEffect(() => {
-    salvarHistoricoLocal(entradasSalvas);
-  }, [entradasSalvas]);
+  async function atualizarDados() {
+    setCarregando(true);
+    setMensagem(null);
+    await carregarDados();
+  }
 
   function alterarCampo(
-    campo: keyof FormularioEntrada,
-    novoValor: string,
+    campo: keyof FormularioMovimentacao,
+    valor: string,
   ) {
+    setFormulario((atual) => ({ ...atual, [campo]: valor }));
+    setMensagem(null);
+  }
+
+  function selecionarProduto(valor: string) {
     setFormulario((atual) => ({
       ...atual,
-      [campo]: novoValor,
+      produto_id: valor,
+      preco_unitario: "",
     }));
+
     setMensagem(null);
   }
 
   function limparFormulario() {
-    setFormulario({
-      ...formularioInicial,
-      data_movimentacao: obterDataAtual(),
-    });
-    setEntradaEmEdicao(null);
+    setFormulario(formularioInicial);
     setMensagem(null);
   }
 
-  function editarEntrada(movimentacao: MovimentacaoVisual) {
-    if (movimentacao.tipo !== "entrada") return;
-
-    setFormulario({
-      produto_id: String(movimentacao.produto_id),
-      quantidade: String(movimentacao.quantidade),
-      descricao: movimentacao.descricao,
-      data_movimentacao:
-        movimentacao.data_movimentacao ?? obterDataAtual(),
-    });
-    setEntradaEmEdicao(movimentacao.id);
-    setMensagem(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function excluirEntradaDoHistorico(movimentacao: MovimentacaoVisual) {
-    if (movimentacao.tipo !== "entrada") return;
-
-    const produto = obterProduto(movimentacao.produto_id, produtos);
-    const nome = produto?.nome ?? `Produto #${movimentacao.produto_id}`;
-
-    const confirmou = window.confirm(
-      [
-        `Excluir a entrada de ${nome} do histórico?`,
-        "",
-        `Quantidade registrada: ${movimentacao.quantidade}`,
-        "",
-        "Esta ação remove somente o registro salvo neste navegador.",
-        "A quantidade do estoque na API não será alterada.",
-      ].join("\n"),
-    );
-
-    if (!confirmou) return;
-
-    setEntradasSalvas((atuais) =>
-      atuais.filter((entrada) => entrada.id !== movimentacao.id),
-    );
-
-    if (entradaEmEdicao === movimentacao.id) {
-      limparFormulario();
-    }
-
-    setMensagem({
-      tipo: "sucesso",
-      texto: "Entrada removida do histórico deste navegador.",
-    });
-  }
-
-  async function cadastrarEntrada(produtoId: number, quantidade: number) {
-    const resposta = await fetch(`${API_URL}/estoque`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ produto_id: produtoId, quantidade }),
-    });
-
-    const dados = await lerResposta(resposta);
-    if (!resposta.ok) {
-      throw new Error(obterMensagemErro(dados, resposta.status));
-    }
-  }
-
-  async function atualizarEstoque(produtoId: number, quantidade: number) {
-    const resposta = await fetch(`${API_URL}/estoque/${produtoId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ produto_id: produtoId, quantidade }),
-    });
-
-    const dados = await lerResposta(resposta);
-    if (!resposta.ok) {
-      throw new Error(obterMensagemErro(dados, resposta.status));
-    }
-  }
-
-  async function salvarEntrada(evento: FormEvent<HTMLFormElement>) {
+  async function salvarMovimentacao(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
+
+    if (salvando) return;
 
     const produtoId = Number(formulario.produto_id);
     const quantidade = Number(formulario.quantidade);
+    const custoUnitario = Number(produtoSelecionado?.preco ?? 0);
 
     if (!Number.isInteger(produtoId) || produtoId <= 0) {
       setMensagem({ tipo: "erro", texto: "Selecione um produto." });
+      return;
+    }
+
+    if (!produtoSelecionado) {
+      setMensagem({
+        tipo: "erro",
+        texto: "Produto não encontrado. Atualize a lista e tente novamente.",
+      });
       return;
     }
 
@@ -426,98 +319,60 @@ function Movimentacao() {
       return;
     }
 
-    if (!produtoSelecionado) {
+    if (!Number.isFinite(custoUnitario) || custoUnitario < 0) {
       setMensagem({
         tipo: "erro",
-        texto: "O produto selecionado não foi encontrado.",
+        texto: "Defina o preço de compra do produto na aba Produtos.",
       });
       return;
     }
+
+    const payload: MovimentacaoPayload = {
+      tipo: "entrada",
+      produto_id: produtoId,
+      quantidade,
+      preco_unitario: Number(custoUnitario.toFixed(2)),
+      descricao: formulario.descricao.trim() || descricaoPadrao(),
+    };
+
+    let precoAtualizado = false;
 
     try {
       setSalvando(true);
       setMensagem(null);
 
-      if (entradaEmEdicao) {
-        const anterior = entradasSalvas.find(
-          (entrada) => entrada.id === entradaEmEdicao,
-        );
-
-        if (!anterior) {
-          throw new Error("A entrada selecionada não foi encontrada.");
-        }
-
-        const estoqueAtual = Number(
-          estoque.find((produto) => produto.id === produtoId)?.quantidade ?? 0,
-        );
-        const novaQuantidadeEstoque =
-          estoqueAtual + (quantidade - anterior.quantidade);
-
-        if (novaQuantidadeEstoque < 0) {
-          throw new Error("A alteração deixaria o estoque negativo.");
-        }
-
-        await atualizarEstoque(produtoId, novaQuantidadeEstoque);
-
-        setEntradasSalvas((atuais) =>
-          atuais.map((entrada) =>
-            entrada.id === entradaEmEdicao
-              ? {
-                  ...entrada,
-                  quantidade,
-                  preco_unitario: Number(precoUnitario.toFixed(2)),
-                  descricao:
-                    formulario.descricao.trim() ||
-                    "Entrada de produto no estoque",
-                  data_movimentacao: formulario.data_movimentacao,
-                }
-              : entrada,
-          ),
-        );
-
-        setMensagem({
-          tipo: "sucesso",
-          texto: "Entrada atualizada com sucesso.",
+      if (
+        produtoSelecionado &&
+        precoVendaMinimo !== null &&
+        precoVendaMinimo > produtoSelecionado.preco
+      ) {
+        await apiRequest(`/produtos/${produtoId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ preco: precoVendaMinimo }),
         });
-      } else {
-        await cadastrarEntrada(produtoId, quantidade);
-
-        const novaEntrada: MovimentacaoVisual = {
-          id: `entrada-${Date.now()}`,
-          tipo: "entrada",
-          produto_id: produtoId,
-          quantidade,
-          preco_unitario: Number(precoUnitario.toFixed(2)),
-          descricao:
-            formulario.descricao.trim() ||
-            "Entrada de produto no estoque",
-          data_movimentacao: formulario.data_movimentacao,
-        };
-
-        setEntradasSalvas((atuais) => [novaEntrada, ...atuais]);
-        setMensagem({
-          tipo: "sucesso",
-          texto: "Entrada registrada com sucesso.",
-        });
+        precoAtualizado = true;
       }
 
-      await carregarDados();
-      window.dispatchEvent(new CustomEvent("estoque-atualizado"));
-      window.dispatchEvent(new CustomEvent("produtos-atualizados"));
-
-      setFormulario({
-        ...formularioInicial,
-        data_movimentacao: obterDataAtual(),
+      await apiRequest<MovimentacaoEstoque>("/fluxo-caixa", {
+        method: "POST",
+        body: JSON.stringify(payload),
       });
-      setEntradaEmEdicao(null);
+
+      setFormulario(formularioInicial);
+      setMensagem({
+        tipo: "sucesso",
+        texto: precoAtualizado
+          ? `Entrada registrada. Preço de venda ajustado para ${formatarMoeda(precoVendaMinimo ?? 0)}.`
+          : "Entrada de estoque registrada com sucesso.",
+      });
+
+      await carregarDados();
     } catch (erro) {
-      console.error("Erro ao salvar entrada:", erro);
       setMensagem({
         tipo: "erro",
-        texto:
-          erro instanceof Error
-            ? erro.message
-            : "Não foi possível salvar a entrada.",
+        texto: precoAtualizado
+          ? `O preço de venda foi ajustado, mas não foi possível confirmar a entrada. Confira o estoque antes de repetir. ${descreverErro(erro)}`
+          : descreverErro(erro),
       });
     } finally {
       setSalvando(false);
@@ -528,12 +383,11 @@ function Movimentacao() {
     <section className="fluxo-caixa">
       <header className="fluxo-cabecalho">
         <div className="fluxo-cabecalho-texto">
-          <span className="fluxo-cabecalho-icone">↕</span>
+          <span className="fluxo-cabecalho-icone">↑</span>
           <div>
-            <h1 className="medium-h1">Movimentação de estoque</h1>
+            <h1 className="medium-h1">Entrada de estoque</h1>
             <p className="light-h3">
-              Registre entradas e acompanhe as saídas realizadas pelo
-              atendimento.
+              Registre entradas e saídas do estoque.
             </p>
           </div>
         </div>
@@ -541,7 +395,7 @@ function Movimentacao() {
         <button
           type="button"
           className="fluxo-botao-atualizar medium-h3"
-          onClick={() => void carregarDados()}
+          onClick={() => void atualizarDados()}
           disabled={carregando || salvando}
         >
           {carregando ? "Atualizando..." : "Atualizar dados"}
@@ -552,54 +406,49 @@ function Movimentacao() {
         <article className="fluxo-resumo-card fluxo-resumo-entrada">
           <div className="fluxo-resumo-topo">
             <span className="fluxo-resumo-icone">+</span>
-            <span className="light-h3">Unidades em estoque</span>
+            <span className="light-h3">Valor de entradas</span>
           </div>
-          <strong className="bold-h2">
-            {formatarNumero(totalUnidadesEstoque)}
-          </strong>
-          <small>Soma atual das unidades disponíveis</small>
+          <strong className="bold-h2">{formatarMoeda(resumo.entradas)}</strong>
+          <small>{formatarNumero(resumo.unidadesEntrada)} un. recebidas</small>
         </article>
 
         <article className="fluxo-resumo-card fluxo-resumo-saida">
           <div className="fluxo-resumo-topo">
             <span className="fluxo-resumo-icone">−</span>
-            <span className="light-h3">Unidades vendidas</span>
+            <span className="light-h3">Valor das saídas</span>
           </div>
-          <strong className="bold-h2">
-            {formatarNumero(totalUnidadesVendidas)}
-          </strong>
-          <small>Saídas registradas pelo atendimento</small>
+          <strong className="bold-h2">{formatarMoeda(resumo.saidas)}</strong>
+          <small>{formatarNumero(resumo.unidadesSaida)} un. baixadas</small>
+        </article>
+
+        <article className="fluxo-resumo-card">
+          <div className="fluxo-resumo-topo">
+            <span className="fluxo-resumo-icone">=</span>
+            <span className="light-h3">Saldo do período</span>
+          </div>
+          <strong className="bold-h2">{formatarMoeda(resumo.saldo)}</strong>
+          <small>Entradas menos saídas</small>
         </article>
       </div>
 
       <article className="fluxo-painel">
         <div className="fluxo-painel-cabecalho">
           <div>
-            <h2 className="medium-h2">
-              {entradaEmEdicao ? "Editar entrada" : "Nova entrada de produto"}
-            </h2>
+            <h2 className="medium-h2">Registrar entrada</h2>
             <p className="light-h3">
-              {entradaEmEdicao
-                ? "Altere os dados da entrada selecionada."
-                : "Selecione um produto e informe a quantidade recebida."}
+              Selecione o produto e informe quantidade e custo unitário.
             </p>
           </div>
-
-          {entradaEmEdicao && (
-            <span className="fluxo-status-edicao medium-h3">Em edição</span>
-          )}
         </div>
 
-        <form className="fluxo-formulario" onSubmit={salvarEntrada}>
+        <form className="fluxo-formulario" onSubmit={salvarMovimentacao}>
           <div className="fluxo-campos">
             <label className="fluxo-campo">
               <span className="medium-h3">Produto</span>
               <select
                 value={formulario.produto_id}
-                onChange={(evento) =>
-                  alterarCampo("produto_id", evento.target.value)
-                }
-                disabled={carregando || Boolean(entradaEmEdicao)}
+                onChange={(evento) => selecionarProduto(evento.target.value)}
+                disabled={carregando}
                 required
               >
                 <option value="">
@@ -614,7 +463,7 @@ function Movimentacao() {
             </label>
 
             <label className="fluxo-campo">
-              <span className="medium-h3">Quantidade recebida</span>
+              <span className="medium-h3">Quantidade</span>
               <input
                 type="number"
                 min="1"
@@ -627,36 +476,46 @@ function Movimentacao() {
               />
             </label>
 
-            <label className="fluxo-campo">
-              <span className="medium-h3">Data da entrada</span>
-              <input
-                type="date"
-                value={formulario.data_movimentacao}
-                onChange={(evento) =>
-                  alterarCampo("data_movimentacao", evento.target.value)
-                }
-                required
-              />
-            </label>
-
             <div className="fluxo-campo">
-              <span className="medium-h3">Categoria</span>
-              <div className="fluxo-informacao">{categoriaProduto}</div>
-            </div>
-
-            <div className="fluxo-campo">
-              <span className="medium-h3">Preço unitário</span>
-              <div className="fluxo-informacao">
+              <span className="medium-h3">Preço de compra</span>
+              <div className="fluxo-informacao fluxo-informacao-valor">
                 {produtoSelecionado
-                  ? formatarMoeda(precoUnitario)
+                  ? formatarMoeda(produtoSelecionado.preco)
                   : "Selecione um produto"}
               </div>
             </div>
 
             <div className="fluxo-campo">
-              <span className="medium-h3">Valor total</span>
+              <span className="medium-h3">Estoque atual</span>
+              <div className="fluxo-informacao">
+                {produtoSelecionado
+                  ? `${formatarNumero(estoqueDisponivel)} un.`
+                  : "Selecione um produto"}
+              </div>
+            </div>
+
+            <div className="fluxo-campo">
+              <span className="medium-h3">Valor total da entrada</span>
               <div className="fluxo-informacao fluxo-informacao-valor">
                 {formatarMoeda(valorTotalFormulario)}
+              </div>
+            </div>
+
+            <div className="fluxo-campo">
+              <span className="medium-h3">Margem mínima</span>
+              <div className="fluxo-informacao">
+                {margemMinima === undefined
+                  ? "Não definida em Produtos"
+                  : `${formatarNumero(margemMinima)}%`}
+              </div>
+            </div>
+
+            <div className="fluxo-campo">
+              <span className="medium-h3">Preço de venda mínimo</span>
+              <div className="fluxo-informacao fluxo-informacao-valor">
+                {precoVendaMinimo === null
+                  ? "Defina a margem em Produtos"
+                  : formatarMoeda(precoVendaMinimo)}
               </div>
             </div>
 
@@ -680,7 +539,7 @@ function Movimentacao() {
                   ? "fluxo-mensagem-sucesso"
                   : "fluxo-mensagem-erro"
               }`}
-              role="alert"
+              role={mensagem.tipo === "erro" ? "alert" : "status"}
             >
               {mensagem.texto}
             </div>
@@ -693,19 +552,15 @@ function Movimentacao() {
               onClick={limparFormulario}
               disabled={salvando}
             >
-              {entradaEmEdicao ? "Cancelar edição" : "Limpar"}
+              Limpar
             </button>
 
             <button
               type="submit"
               className="fluxo-botao-salvar medium-h3"
-              disabled={salvando}
+              disabled={salvando || carregando}
             >
-              {salvando
-                ? "Salvando..."
-                : entradaEmEdicao
-                  ? "Atualizar entrada"
-                  : "Registrar entrada"}
+              {salvando ? "Salvando..." : "Registrar entrada"}
             </button>
           </div>
         </form>
@@ -716,7 +571,7 @@ function Movimentacao() {
           <div>
             <h2 className="medium-h2">Histórico de movimentações</h2>
             <p className="light-h3">
-              Entradas locais podem ser editadas ou removidas do histórico.
+              Histórico de entradas e saídas registradas no estoque.
             </p>
           </div>
 
@@ -726,12 +581,14 @@ function Movimentacao() {
               value={busca}
               onChange={(evento) => setBusca(evento.target.value)}
               placeholder="Buscar produto"
+              aria-label="Buscar movimentação"
             />
             <select
               value={filtroTipo}
               onChange={(evento) =>
                 setFiltroTipo(evento.target.value as "todos" | TipoMovimentacao)
               }
+              aria-label="Filtrar por tipo"
             >
               <option value="todos">Todas</option>
               <option value="entrada">Entradas</option>
@@ -744,15 +601,15 @@ function Movimentacao() {
           <table className="fluxo-tabela">
             <thead>
               <tr>
-                <th>Movimentação</th>
-                <th>Produto</th>
-                <th>Categoria</th>
-                <th>Descrição</th>
-                <th>Data</th>
-                <th>Quantidade</th>
-                <th>Preço unitário</th>
-                <th>Valor total</th>
-                <th className="fluxo-coluna-acoes">Ações</th>
+                <SortableHeader label="Movimentação" active={ordenacao?.coluna === "tipo"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("tipo")} />
+                <SortableHeader label="Produto" active={ordenacao?.coluna === "produto"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("produto")} />
+                <SortableHeader label="Categoria" active={ordenacao?.coluna === "categoria"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("categoria")} />
+                <SortableHeader label="Descrição" active={ordenacao?.coluna === "descricao"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("descricao")} />
+                <SortableHeader label="Data" active={ordenacao?.coluna === "data"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("data")} />
+                <SortableHeader label="Venda" active={ordenacao?.coluna === "venda"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("venda")} />
+                <SortableHeader label="Quantidade" active={ordenacao?.coluna === "quantidade"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("quantidade")} />
+                <SortableHeader label="Preço unitário" active={ordenacao?.coluna === "unitario"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("unitario")} />
+                <SortableHeader label="Valor total" active={ordenacao?.coluna === "total"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("total")} />
               </tr>
             </thead>
 
@@ -763,30 +620,30 @@ function Movimentacao() {
                     Carregando dados...
                   </td>
                 </tr>
-              ) : historicoFiltrado.length === 0 ? (
+              ) : historicoOrdenado.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="fluxo-tabela-vazia">
                     Nenhuma movimentação encontrada.
                   </td>
                 </tr>
               ) : (
-                historicoFiltrado.map((movimentacao) => {
-                  const produto = obterProduto(movimentacao.produto_id, produtos);
-                  const nome = produto?.nome ?? `Produto #${movimentacao.produto_id}`;
+                historicoOrdenado.map((movimentacao) => {
+                  const produto = produtosPorId.get(movimentacao.produto_id);
+                  const nome =
+                    produto?.nome ??
+                    movimentacao.produto?.nome ??
+                    `Produto #${movimentacao.produto_id}`;
                   const categoria = produto?.tipo ?? "Não informada";
-                  const total = movimentacao.quantidade * movimentacao.preco_unitario;
+                  const total =
+                    Number(movimentacao.quantidade || 0) *
+                    Number(movimentacao.preco_unitario || 0);
 
                   return (
-                    <tr
-                      key={movimentacao.id}
-                      className={
-                        entradaEmEdicao === movimentacao.id
-                          ? "fluxo-linha-em-edicao"
-                          : ""
-                      }
-                    >
+                    <tr key={movimentacao.id}>
                       <td>
-                        <span className={`fluxo-status fluxo-status-${movimentacao.tipo}`}>
+                        <span
+                          className="fluxo-status"
+                        >
                           {movimentacao.tipo === "entrada" ? "Entrada" : "Saída"}
                         </span>
                       </td>
@@ -800,38 +657,16 @@ function Movimentacao() {
                       </td>
                       <td>{categoria}</td>
                       <td>{movimentacao.descricao}</td>
-                      <td>{formatarData(movimentacao.data_movimentacao)}</td>
+                      <td>{formatarData(movimentacao.data)}</td>
+                      <td>
+                        {movimentacao.venda_id
+                          ? `#${movimentacao.venda_id}`
+                          : "—"}
+                      </td>
                       <td>{formatarNumero(movimentacao.quantidade)} un.</td>
                       <td>{formatarMoeda(movimentacao.preco_unitario)}</td>
-                      <td className="fluxo-valor-total">{formatarMoeda(total)}</td>
-                      <td>
-                        <div className="fluxo-acoes-linha">
-                          {movimentacao.tipo === "entrada" ? (
-                            <>
-                              <button
-                                type="button"
-                                className="fluxo-acao fluxo-editar"
-                                onClick={() => editarEntrada(movimentacao)}
-                                aria-label={`Editar entrada de ${nome}`}
-                                title="Editar entrada"
-                              >
-                                <Pencil size={16} />
-                              </button>
-
-                              <button
-                                type="button"
-                                className="fluxo-acao fluxo-excluir"
-                                onClick={() => excluirEntradaDoHistorico(movimentacao)}
-                                aria-label={`Excluir entrada de ${nome}`}
-                                title="Excluir do histórico"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </>
-                          ) : (
-                            <span className="fluxo-sem-acao">Automática</span>
-                          )}
-                        </div>
+                      <td className="fluxo-valor-total">
+                        {formatarMoeda(total)}
                       </td>
                     </tr>
                   );

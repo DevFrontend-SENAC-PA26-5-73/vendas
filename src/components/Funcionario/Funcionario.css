@@ -57,6 +57,49 @@
   color: var(--texto-suave);
 }
 
+.func-lista-controles {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.func-busca {
+  min-width: 220px;
+  height: 40px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  color: var(--texto-suave);
+  background: #fff;
+  flex: 1;
+}
+
+.func-busca input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  color: var(--texto);
+  background: transparent;
+  font: inherit;
+}
+
+.func-filtro-cargo {
+  min-width: 190px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  color: var(--texto);
+  background: #fff;
+  font: inherit;
+}
+
 /* Painel cinza com campos */
 .func-painel {
   background: var(--painel);
@@ -194,6 +237,54 @@
   white-space: nowrap;
 }
 
+.func-acoes-linha {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.func-acao {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background-color: transparent;
+  border: none;
+  border-radius: 6px;
+
+  cursor: pointer;
+
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.func-acao:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.func-editar {
+  color: var(--texto);
+}
+
+.func-editar:hover:not(:disabled) {
+  background-color: var(--painel);
+}
+
+.func-excluir {
+  color: var(--vermelho);
+}
+
+.func-excluir:hover:not(:disabled) {
+  background-color: #fdeceb;
+}
+
 .func-vazio {
   text-align: center !important;
   color: var(--texto-fraco);
@@ -255,6 +346,15 @@
 }
 
 @media (max-width: 560px) {
+  .func-lista-controles {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .func-filtro-cargo {
+    width: 100%;
+  }
+
   .func-grade {
     grid-template-columns: 1fr;
   }

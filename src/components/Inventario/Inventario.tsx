@@ -1,9 +1,51 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import axios from "axios";
+import {
+  AlertTriangle,
+  Boxes,
+  PackageSearch,
+  PackageX,
+  RefreshCw,
+  Search,
+  Warehouse,
+} from "lucide-react";
 
 import "./Inventario.css";
 
-const API_URL = "https://vendas.gabrielpimentel.com.br";
+import { API_BASE_URL } from "../../lib/api";
+import SortableHeader from "../SortableHeader/SortableHeader";
+import { ordenarLista } from "../../lib/ordenacao";
+import type { DirecaoOrdenacao } from "../../lib/ordenacao";
+
+const API = {
+  produtos: `${API_BASE_URL}/produtos`,
+  estoque: `${API_BASE_URL}/estoque`,
+  fluxoCaixa: `${API_BASE_URL}/fluxo-caixa`,
+};
+
+type ProdutoApi = {
+  id: number;
+  nome: string;
+  descricao?: string | null;
+  codigo_barra?: string | null;
+  quantidade: number;
+  tipo: string;
+  preco: number;
+};
+
+type EstoqueApi = {
+  id: number;
+  nome: string;
+  quantidade: number;
+  tipo: string;
+  preco: number;
+};
 
 const ESTOQUE_MINIMO = 5;
 
@@ -19,10 +61,14 @@ type Produto = {
 
 type Situacao = "disponivel" | "baixo" | "esgotado";
 
-const rotuloSituacao: Record<Situacao, string> = {
-  disponivel: "Disponível",
-  baixo: "Estoque baixo",
-  esgotado: "Esgotado",
+type ColunaOrdenacaoInventario =
+  | "codigo" | "nome" | "categoria" | "descricao" | "quantidade"
+  | "preco" | "valor" | "situacao";
+
+type Mensagem = {
+  tipo: "erro" | "info" | "sucesso";
+  codigo: string;
+  texto: string;
 };
 
 /* =========================
@@ -50,27 +96,43 @@ function classificarEstoque(quantidade: number): Situacao {
   return "disponivel";
 }
 
-/* =========================
-   Componente
+function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
+  const [itens, setItens] = useState<ItemInventario[]>([]);
+  const [busca, setBusca] = useState("");
+  const [categoria, setCategoria] = useState("todas");
+  const [situacao, setSituacao] =
+    useState<FiltroSituacao>("todos");
+  const [carregando, setCarregando] = useState(true);
+  const [zerandoProdutoId, setZerandoProdutoId] = useState<number | null>(null);
+  const [ordenacao, setOrdenacao] = useState<{
+    coluna: ColunaOrdenacaoInventario;
+    direcao: DirecaoOrdenacao;
+  } | null>(null);
+  const [mensagem, setMensagem] =
+    useState<Mensagem | null>(null);
+
+  function exibirErro(erro: Mensagem) {
+    setMensagem(erro);
+    window.alert(`${erro.codigo}: ${erro.texto}`);
+  }
 
   const carregarInventario = useCallback(async () => {
     try {
-      setCarregando(true);
-      setErro(null);
+      const [respostaProdutos, respostaEstoque] =
+        await Promise.all([
+          axios.get<unknown>(API.produtos, {
+            headers: { Accept: "application/json" },
+            timeout: 15000,
+          }),
+          axios.get<unknown>(API.estoque, {
+            headers: { Accept: "application/json" },
+            timeout: 15000,
+          }),
+        ]);
 
-      const [respostaProdutos, respostaEstoque] = await Promise.allSettled([
-        fetch(`${API_URL}/produtos`),
-        fetch(`${API_URL}/estoque`),
-      ]);
-
-      if (
-        respostaProdutos.status !== "fulfilled" ||
-        !respostaProdutos.value.ok
-      ) {
-        throw new Error(
-          "Não foi possível carregar os produtos do inventário.",
-        );
-      }
+      const produtos = normalizarLista<ProdutoApi>(
+        respostaProdutos.data,
+      );
 
       const listaProdutos = normalizarProdutos(
         await respostaProdutos.value.json(),
@@ -86,10 +148,11 @@ function classificarEstoque(quantidade: number): Situacao {
         );
       }
 
-      const listaCompleta = listaProdutos.map((produto) => ({
-        ...produto,
-        quantidade: quantidadesEstoque.get(produto.id) ?? produto.quantidade,
-      }));
+      setItens(inventario);
+      setMensagem(null);
+    } catch (erro) {
+      console.group("[INVENTARIO] Erro ao carregar dados");
+      console.error(erro);
 
       listaCompleta.sort((primeiro, segundo) =>
         primeiro.nome.localeCompare(segundo.nome, "pt-BR"),
@@ -112,16 +175,25 @@ function classificarEstoque(quantidade: number): Situacao {
   }, []);
 
   useEffect(() => {
-    void carregarInventario();
+    async function iniciar() {
+      await carregarInventario();
+    }
+
+    void iniciar();
   }, [carregarInventario]);
 
   useEffect(() => {
     function atualizar() {
       void carregarInventario();
     }
-
-    window.addEventListener("estoque-atualizado", atualizar);
-    window.addEventListener("produtos-atualizados", atualizar);
+    window.addEventListener(
+      "produtos-atualizados",
+      atualizarInventario,
+    );
+    window.addEventListener(
+      "estoque-atualizado",
+      atualizarInventario,
+    );
 
     return () => {
       window.removeEventListener("estoque-atualizado", atualizar);
@@ -129,9 +201,55 @@ function classificarEstoque(quantidade: number): Situacao {
     };
   }, [carregarInventario]);
 
-  /* =========================
-     Resumos
-  ========================= */
+  function atualizarManual() {
+    setCarregando(true);
+    setMensagem(null);
+    void carregarInventario();
+  }
+
+  async function zerarEstoque(item: ItemInventario) {
+    if (item.quantidade <= 0 || zerandoProdutoId !== null) return;
+
+    const confirmado = window.confirm(
+      `Registrar a saída de ${formatarNumero(item.quantidade)} unidade(s) de "${item.nome}" e zerar o estoque? O produto continuará no catálogo para preservar o histórico.`,
+    );
+    if (!confirmado) return;
+
+    setZerandoProdutoId(item.id);
+    setMensagem(null);
+
+    try {
+      await axios.post(API.fluxoCaixa, {
+        tipo: "saida",
+        produto_id: item.id,
+        quantidade: item.quantidade,
+        preco_unitario: Number(item.preco || 0),
+        descricao: "Ajuste negativo realizado pelo inventário",
+      });
+
+      await carregarInventario();
+      setMensagem({
+        tipo: "sucesso",
+        codigo: "INV-S001",
+        texto: `O estoque de "${item.nome}" foi zerado. O produto continua cadastrado no catálogo.`,
+      });
+      window.dispatchEvent(new CustomEvent("estoque-atualizado"));
+    } catch (erro) {
+      exibirErro(diagnosticarErro(erro));
+    } finally {
+      setZerandoProdutoId(null);
+    }
+  }
+
+  const categorias = useMemo(() => {
+    return Array.from(
+      new Set(
+        itens
+          .map((item) => item.tipo.trim())
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [itens]);
 
   const resumo = useMemo(() => {
     return produtos.reduce(
@@ -164,15 +282,31 @@ function classificarEstoque(quantidade: number): Situacao {
     return Array.from(valores).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [produtos]);
 
-  const produtosFiltrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+  const itensFiltrados = useMemo(() => {
+    const termos = [busca, buscaGlobal]
+      .map((valor) => valor
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase(),
+      )
+      .filter(Boolean);
 
-    return produtos.filter((produto) => {
-      const correspondeBusca =
-        termo.length === 0 ||
-        [produto.nome, produto.tipo, produto.codigo_barra].some((campo) =>
-          campo.toLowerCase().includes(termo),
+    return itens.filter((item) => {
+      const camposBusca = [
+          item.nome,
+          item.codigoBarra,
+          item.tipo,
+          item.descricao,
+        ]
+        .map((valor) => String(valor ?? "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase(),
         );
+      const correspondeBusca = termos.every((termo) =>
+        camposBusca.some((campo) => campo.includes(termo)),
+      );
 
       const correspondeCategoria =
         filtroCategoria === "todas" ||
@@ -186,7 +320,34 @@ function classificarEstoque(quantidade: number): Situacao {
         correspondeBusca && correspondeCategoria && correspondeSituacao
       );
     });
-  }, [busca, filtroCategoria, filtroSituacao, produtos]);
+  }, [itens, busca, buscaGlobal, categoria, situacao]);
+
+  const itensOrdenados = useMemo(() => {
+    if (!ordenacao) return itensFiltrados;
+    return ordenarLista(
+      itensFiltrados,
+      (item) => {
+        switch (ordenacao.coluna) {
+          case "codigo": return item.codigoBarra;
+          case "nome": return item.nome;
+          case "categoria": return item.tipo;
+          case "descricao": return item.descricao;
+          case "quantidade": return item.quantidade;
+          case "preco": return item.preco;
+          case "valor": return item.quantidade * item.preco;
+          case "situacao": return item.quantidade === 0 ? 0 : item.quantidade <= LIMITE_ESTOQUE_BAIXO ? 1 : 2;
+        }
+      },
+      ordenacao.direcao,
+    );
+  }, [itensFiltrados, ordenacao]);
+
+  function alternarOrdenacao(coluna: ColunaOrdenacaoInventario) {
+    setOrdenacao((atual) => ({
+      coluna,
+      direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
+    }));
+  }
 
   return (
     <section className="inventario">
@@ -204,25 +365,32 @@ function classificarEstoque(quantidade: number): Situacao {
           </div>
         </div>
 
-        <div className="inventario-cabecalho-acoes">
-          {atualizadoEm && (
-            <span className="light-h3 inventario-atualizado">
-              Atualizado às{" "}
-              {atualizadoEm.toLocaleTimeString("pt-BR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-          )}
+        <button
+          type="button"
+          className="inventario-atualizar medium-h3"
+          onClick={atualizarManual}
+          disabled={carregando}
+        >
+          <RefreshCw
+            size={17}
+            className={
+              carregando ? "inventario-girando" : ""
+            }
+          />
 
-          <button
-            type="button"
-            className="inventario-botao-atualizar medium-h3"
-            onClick={() => void carregarInventario()}
-            disabled={carregando}
-          >
-            {carregando ? "Atualizando..." : "Atualizar inventário"}
-          </button>
+          {carregando
+            ? "Atualizando..."
+            : "Atualizar inventário"}
+        </button>
+      </header>
+
+      {mensagem && (
+        <div
+          className={`inventario-mensagem inventario-mensagem-${mensagem.tipo}`}
+          role={mensagem.tipo === "erro" ? "alert" : "status"}
+        >
+          <strong>{mensagem.codigo}: </strong>
+          {mensagem.texto}
         </div>
       </header>
 
@@ -272,41 +440,17 @@ function classificarEstoque(quantidade: number): Situacao {
             <h2 className="medium-h2">Posição de estoque</h2>
 
             <p className="light-h3">
-              {carregando
-                ? "Carregando produtos..."
-                : `${produtosFiltrados.length} de ${produtos.length} produto(s) exibido(s)`}
+              Consulte os saldos e zere o estoque de produtos descontinuados. O cadastro e o histórico de vendas serão preservados.
             </p>
           </div>
+        </div>
 
-          <div className="inventario-filtros">
-            <div className="inventario-busca">
-              <Search size={16} className="inventario-busca-icone" />
-
-              <input
-                type="search"
-                value={busca}
-                onChange={(evento) => setBusca(evento.target.value)}
-                placeholder="Buscar produto"
-                aria-label="Buscar produto no inventário"
-              />
-            </div>
-
-            <select
-              value={filtroCategoria}
-              onChange={(evento) => setFiltroCategoria(evento.target.value)}
-              aria-label="Filtrar por categoria"
-            >
-              <option value="todas">Todas as categorias</option>
-
-              {categorias.map((categoria) => (
-                <option key={categoria} value={categoria}>
-                  {categoria}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filtroSituacao}
+        <div className="inventario-filtros">
+          <div className="inventario-busca">
+            <Search size={18} />
+            <input
+              type="search"
+              value={busca}
               onChange={(evento) =>
                 setFiltroSituacao(evento.target.value as "todas" | Situacao)
               }
@@ -324,34 +468,55 @@ function classificarEstoque(quantidade: number): Situacao {
           <table className="inventario-tabela">
             <thead>
               <tr>
-                <th>Produto</th>
-                <th>Categoria</th>
-                <th>Código interno</th>
-                <th>Quantidade</th>
-                <th>Preço unitário</th>
-                <th>Valor em estoque</th>
-                <th>Situação</th>
+                <SortableHeader label="Código" active={ordenacao?.coluna === "codigo"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("codigo")} />
+                <SortableHeader label="Produto" active={ordenacao?.coluna === "nome"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("nome")} />
+                <SortableHeader label="Categoria" active={ordenacao?.coluna === "categoria"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("categoria")} />
+                <SortableHeader label="Descrição" active={ordenacao?.coluna === "descricao"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("descricao")} />
+                <SortableHeader label="Quantidade" active={ordenacao?.coluna === "quantidade"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("quantidade")} />
+                <SortableHeader label="Preço unitário" active={ordenacao?.coluna === "preco"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("preco")} />
+                <SortableHeader label="Valor em estoque" active={ordenacao?.coluna === "valor"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("valor")} />
+                <SortableHeader label="Situação" active={ordenacao?.coluna === "situacao"} direction={ordenacao?.direcao ?? "desc"} onClick={() => alternarOrdenacao("situacao")} />
+                <th>Ações</th>
               </tr>
             </thead>
 
             <tbody>
               {carregando ? (
                 <tr>
-                  <td colSpan={7} className="inventario-tabela-vazia">
+                  <td
+                    colSpan={9}
+                    className="inventario-sem-resultados"
+                  >
                     Carregando inventário...
                   </td>
                 </tr>
-              ) : produtosFiltrados.length === 0 ? (
+              ) : itensOrdenados.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="inventario-tabela-vazia">
-                    {produtos.length === 0
-                      ? "Nenhum produto cadastrado."
-                      : "Nenhum produto encontrado com os filtros atuais."}
+                  <td
+                    colSpan={9}
+                    className="inventario-sem-resultados"
+                  >
+                    Nenhum produto encontrado.
                   </td>
                 </tr>
               ) : (
-                produtosFiltrados.map((produto) => {
-                  const situacao = classificarEstoque(produto.quantidade);
+                itensOrdenados.map((item) => {
+                  let situacaoItem = "Normal";
+                  let classeSituacao =
+                    "inventario-status-normal";
+
+                  if (item.quantidade === 0) {
+                    situacaoItem = "Sem estoque";
+                    classeSituacao =
+                      "inventario-status-sem-estoque";
+                  } else if (
+                    item.quantidade <=
+                    LIMITE_ESTOQUE_BAIXO
+                  ) {
+                    situacaoItem = "Estoque baixo";
+                    classeSituacao =
+                      "inventario-status-baixo";
+                  }
 
                   return (
                     <tr key={produto.id}>
@@ -388,6 +553,25 @@ function classificarEstoque(quantidade: number): Situacao {
                         >
                           {rotuloSituacao[situacao]}
                         </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="inventario-zerar"
+                          onClick={() => void zerarEstoque(item)}
+                          disabled={item.quantidade <= 0 || zerandoProdutoId !== null}
+                          aria-label={`Zerar estoque de ${item.nome}`}
+                          title={
+                            item.quantidade <= 0
+                              ? "Produto já está sem estoque"
+                              : "Registrar saída e zerar estoque"
+                          }
+                        >
+                          <PackageX size={15} />
+                          {zerandoProdutoId === item.id
+                            ? "Zerando..."
+                            : "Zerar estoque"}
+                        </button>
                       </td>
                     </tr>
                   );

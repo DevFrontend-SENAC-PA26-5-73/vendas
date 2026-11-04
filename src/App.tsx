@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import Cargo from "./components/Cargo/Cargo";
 import Funcionario from "./components/Funcionario/Funcionario";
@@ -7,32 +7,35 @@ import "./App.css";
 
 import Cabecalho from "./components/Cabecalho/Cabecalho";
 import MenuLateral from "./components/MenuLateral/MenuLateral";
-import Dashboard from "./components/Dashboard/Dashboard";
-import Atendimento from "./components/Atendimento/Atendimento";
-import Clientes from "./components/Clientes/Clientes";
-import Movimentacao from "./components/Movimentacao/Movimentacao";
-feature/add-configuraçao-rebecca
-import Inventario from "./components/Inventario/Inventario";
-import Produtos from "./components/Produtos/Produto";
-import Configuracao from "./components/Configuracao/Configuracao";
 
-import Produtos from "./components/Produtos/Produtos";
-import Inventario from "./components/Inventario/Inventario";
-main
+const Dashboard = lazy(() => import("./components/Dashboard/Dashboard"));
+const Atendimento = lazy(() => import("./components/Atendimento/Atendimento"));
+const Clientes = lazy(() => import("./components/Clientes/Clientes"));
+const Cargo = lazy(() => import("./components/Cargo/Cargo"));
+const Funcionario = lazy(() => import("./components/Funcionario/Funcionario"));
+const Movimentacao = lazy(() => import("./components/Movimentacao/Movimentacao"));
+const Produtos = lazy(() => import("./components/Produtos/Produtos"));
+const Inventario = lazy(() => import("./components/Inventario/Inventario"));
 
 function App() {
   const [paginaAtiva, setPaginaAtiva] = useState<string>("Dashboard");
+  const [buscaGlobal, setBuscaGlobal] = useState("");
+
+  function mudarPagina(pagina: string) {
+    setPaginaAtiva(pagina);
+    setBuscaGlobal("");
+  }
 
   function renderizarPagina() {
     switch (paginaAtiva) {
       case "Dashboard":
-        return <Dashboard />;
+        return <Dashboard buscaGlobal={buscaGlobal} />;
 
       case "Atendimento":
-        return <Atendimento />;
+        return <Atendimento buscaGlobal={buscaGlobal} />;
 
       case "Clientes":
-        return <Clientes />;
+        return <Clientes buscaGlobal={buscaGlobal} />;
 
       case "Fornecedores":
         return (
@@ -43,24 +46,24 @@ function App() {
         );
 
       case "Movimentação":
-        return <Movimentacao />;
+        return <Movimentacao buscaGlobal={buscaGlobal} />;
 
       case "Inventário":
       case "Inventario":
         return <Inventario />;
 
       case "Produtos":
-        return <Produtos />;
+        return <Produtos buscaGlobal={buscaGlobal} />;
 
       case "Cargo":
-        return <Cargo />;
+        return <Cargo buscaGlobal={buscaGlobal} />;
 
       case "Funcionario":
       case "Funcionário":
-        return <Funcionario />;
+        return <Funcionario buscaGlobal={buscaGlobal} />;
 
-      case "Configuração":
-        return <Configuracao />;
+      case "Inventario":
+        return <Inventario buscaGlobal={buscaGlobal} />;
 
       default:
         return <> </>;
@@ -70,18 +73,26 @@ function App() {
   return (
     <div className="app">
       <header className="app-cabecalho">
-        <Cabecalho aoMudarPagina={setPaginaAtiva} />
+        <Cabecalho busca={buscaGlobal} aoAlterarBusca={setBuscaGlobal} />
       </header>
 
       <aside className="app-menu">
         <MenuLateral
           paginaAtiva={paginaAtiva}
-          aoMudarPagina={setPaginaAtiva}
+          aoMudarPagina={mudarPagina}
         />
       </aside>
 
       <main className="app-main">
-        {renderizarPagina()}
+        <Suspense
+          fallback={
+            <p className="app-carregando" role="status">
+              Carregando tela...
+            </p>
+          }
+        >
+          {renderizarPagina()}
+        </Suspense>
       </main>
     </div>
   );
