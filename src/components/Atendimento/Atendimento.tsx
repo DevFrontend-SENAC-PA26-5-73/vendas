@@ -5,6 +5,10 @@ import { ordenarLista } from "../../lib/ordenacao";
 import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 import "./Atendimento.css";
 import Button from "../Button/Button";
+import CampoNumero from "../CampoNumero/CampoNumero";
+import { useCampoNumero } from "../CampoNumero/useCampoNumero";
+import Notificacao from "../Notificacao/Notificacao";
+import { useNotificacoes } from "../Notificacao/useNotificacoes";
 
 type Cliente = {
   id: number;
@@ -22,6 +26,7 @@ type Funcionario = {
 type Transportadora = {
   id: number;
   nome: string;
+  contato: string;
 };
 
 type Produto = {
@@ -46,36 +51,11 @@ type ItemPedido = {
 type ColunaOrdenacaoItemPedido = "produto" | "codigo" | "quantidade" | "preco" | "subtotal";
 const API_CLIENTES_URL = "/clientes";
 const API_FUNCIONARIOS_URL = "/funcionarios";
-const API_TRANSPORTADORAS_URL = "/transportadoras";
+const API_TRANSPORTADORAS_URL = "/transportadora";
 const API_PRODUTOS_URL = "/produtos";
 const API_VENDAS_URL = "/vendas";
 const API_ITENS_VENDA_URL = "/itemvenda";
 const API_PAGAMENTOS_URL = "/pagamentos";
-const CHAVE_FALHA_FECHAMENTO = "vendas:atendimento:falha-fechamento";
-
-function lerFalhaFechamentoSalva() {
-  try {
-    return sessionStorage.getItem(CHAVE_FALHA_FECHAMENTO) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function salvarFalhaFechamento(texto: string) {
-  try {
-    sessionStorage.setItem(CHAVE_FALHA_FECHAMENTO, texto);
-  } catch {
-    return;
-  }
-}
-
-function limparFalhaFechamentoSalva() {
-  try {
-    sessionStorage.removeItem(CHAVE_FALHA_FECHAMENTO);
-  } catch {
-    return;
-  }
-}
 
 function hojeISO() {
   const agora = new Date();
@@ -147,6 +127,7 @@ function extrairLista(dados: unknown): unknown[] {
     else if (Array.isArray(objeto.clientes)) atual = objeto.clientes;
     else if (Array.isArray(objeto.funcionarios)) atual = objeto.funcionarios;
     else if (Array.isArray(objeto.transportadoras)) atual = objeto.transportadoras;
+    else if (Array.isArray(objeto.transportadora)) atual = objeto.transportadora;
     else if (Array.isArray(objeto.produtos)) atual = objeto.produtos;
     else if (Array.isArray(objeto.items)) atual = objeto.items;
     else if (objeto.data !== undefined) atual = objeto.data;
@@ -220,6 +201,7 @@ function normalizarTransportadoras(dados: unknown): Transportadora[] {
         nome:
           lerTexto(registro, "nome", "razao_social", "nome_fantasia") ||
           `Transportadora ${id}`,
+        contato: lerTexto(registro, "contato", "telefone", "celular"),
       };
     })
     .filter(
@@ -288,6 +270,7 @@ type ComprovantePedido = {
   transportadoraNome: string;
   itens: ItemPedido[];
   subtotal: number;
+  descontoPercentual: number;
   desconto: number;
   frete: number;
   total: number;
@@ -344,12 +327,6 @@ function formatarDataBr(dataISO: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
-function paraValorMonetario(valor: string): number {
-  const numero = Number(valor.replace(",", "."));
-
-  return Number.isFinite(numero) && numero > 0 ? numero : 0;
-}
-
 function normalizarBusca(valor: unknown) {
   return String(valor ?? "")
     .normalize("NFD")
@@ -359,23 +336,25 @@ function normalizarBusca(valor: unknown) {
 }
 
 function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
+  const { notificacoes, mostrar, fechar } = useNotificacoes();
   const [clientesCadastrados, setClientesCadastrados] = useState<Cliente[]>([]);
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState("");
-  const [buscaCliente, setBuscaCliente] = useState("");
   const [funcionariosCadastrados, setFuncionariosCadastrados] = useState<Funcionario[]>([]);
   const [transportadorasCadastradas, setTransportadorasCadastradas] = useState<Transportadora[]>([]);
   const [produtosCadastrados, setProdutosCadastrados] = useState<Produto[]>([]);
   const [carregandoProdutos, setCarregandoProdutos] = useState(true);
   const [produtoSelecionadoId, setProdutoSelecionadoId] = useState("");
-  const [buscaProduto, setBuscaProduto] = useState("");
-  const [quantidade, setQuantidade] = useState(1);
   const [itensPedido, setItensPedido] = useState<ItemPedido[]>([]);
     const [ordenacaoItens, setOrdenacaoItens] = useState<{
       coluna: ColunaOrdenacaoItemPedido;
       direcao: DirecaoOrdenacao;
     } | null>(null);
-  const [desconto, setDesconto] = useState(0);
-  const [frete, setFrete] = useState(0);
+  const quantidadeCampo = useCampoNumero(1);
+  const descontoCampo = useCampoNumero(0);
+  const freteCampo = useCampoNumero(0);
+  const quantidade = quantidadeCampo.valor;
+  const descontoPercentual = descontoCampo.valor;
+  const frete = freteCampo.valor;
   const [formaPagamento, setFormaPagamento] = useState("");
   const [transportadoraId, setTransportadoraId] = useState("");
   const [funcionarioId, setFuncionarioId] = useState("");
@@ -387,9 +366,7 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
   const [salvando, setSalvando] = useState(false);
   const [proximoPedidoId, setProximoPedidoId] = useState<number | null>(null);
   const [erroCarregamento, setErroCarregamento] = useState("");
-  const [falhaFechamento, setFalhaFechamento] = useState(
-    lerFalhaFechamentoSalva,
-  );
+  const [falhaFechamento, setFalhaFechamento] = useState("");
   const proximoItemId = useRef(1);
 
   /**
@@ -429,8 +406,9 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
         normalizarTransportadoras(transportadoras.value),
       );
     } else {
-      // Rota opcional: sem lista o campo vira um ID digitado.
+      // Sem lista o campo vira um ID digitado, mas a falha é avisada.
       setTransportadorasCadastradas([]);
+      falhas.push("transportadoras");
     }
 
     if (produtos.status === "fulfilled") {
@@ -477,31 +455,29 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
     (produto) => produto.id === Number(produtoSelecionadoId)
   );
   const clientesParaSelecionar = useMemo(() => {
-    const termo = normalizarBusca(buscaCliente);
     const termoGlobal = normalizarBusca(buscaGlobal);
-    return clientesCadastrados.filter((cliente) =>
-      cliente.id === Number(clienteSelecionadoId) ||
-      ((!termo || normalizarBusca(
+
+    return clientesCadastrados.filter(
+      (cliente) =>
+        cliente.id === Number(clienteSelecionadoId) ||
+        !termoGlobal ||
+        normalizarBusca(
           `${cliente.id} ${cliente.nome} ${cliente.cpf} ${cliente.contato} ${cliente.email}`,
-        ).includes(termo)) &&
-        (!termoGlobal || normalizarBusca(
-          `${cliente.id} ${cliente.nome} ${cliente.cpf} ${cliente.contato} ${cliente.email}`,
-        ).includes(termoGlobal))),
+        ).includes(termoGlobal),
     );
-  }, [buscaGlobal, buscaCliente, clienteSelecionadoId, clientesCadastrados]);
+  }, [buscaGlobal, clienteSelecionadoId, clientesCadastrados]);
   const produtosParaSelecionar = useMemo(() => {
-    const termo = normalizarBusca(buscaProduto);
     const termoGlobal = normalizarBusca(buscaGlobal);
-    return produtosCadastrados.filter((produto) =>
-      produto.id === Number(produtoSelecionadoId) ||
-      ((!termo || normalizarBusca(
+
+    return produtosCadastrados.filter(
+      (produto) =>
+        produto.id === Number(produtoSelecionadoId) ||
+        !termoGlobal ||
+        normalizarBusca(
           `${produto.id} ${produto.nome} ${produto.codigo} ${produto.estoque ?? ""}`,
-        ).includes(termo)) &&
-        (!termoGlobal || normalizarBusca(
-          `${produto.id} ${produto.nome} ${produto.codigo} ${produto.estoque ?? ""}`,
-        ).includes(termoGlobal))),
+        ).includes(termoGlobal),
     );
-  }, [buscaGlobal, buscaProduto, produtoSelecionadoId, produtosCadastrados]);
+  }, [buscaGlobal, produtoSelecionadoId, produtosCadastrados]);
   const estoqueSelecionado = produtoSelecionado?.estoque ?? null;
   const subtotalProduto = (produtoSelecionado?.preco ?? 0) * quantidade;
   const subtotalPedido = useMemo(
@@ -531,7 +507,12 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
       direcao: atual?.coluna === coluna && atual.direcao === "desc" ? "asc" : "desc",
     }));
   }
-  const totalPedido = Math.max(subtotalPedido - desconto + frete, 0);
+  /** O desconto é informado em porcentagem e aplicado sobre o subtotal. */
+  const valorDesconto = useMemo(
+    () => (subtotalPedido * descontoPercentual) / 100,
+    [descontoPercentual, subtotalPedido],
+  );
+  const totalPedido = Math.max(subtotalPedido - valorDesconto + frete, 0);
   const valoresParcelas = useMemo(
     () => dividirEmParcelas(totalPedido, parcelas),
     [parcelas, totalPedido],
@@ -555,13 +536,18 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
     return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
+  /** Notificação de erro exibida no canto da tela. */
+  function avisarErro(mensagem: string) {
+    mostrar("erro", "Deu erro", mensagem);
+  }
+
   function adicionarProduto() {
     if (!produtoSelecionado) {
-      alert("Selecione um produto cadastrado.");
+      avisarErro("Selecione um produto cadastrado.");
       return;
     }
     if (!Number.isInteger(quantidade) || quantidade < 1) {
-      alert("Informe uma quantidade válida.");
+      avisarErro("Informe uma quantidade válida.");
       return;
     }
 
@@ -570,7 +556,7 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
     const quantidadeTotal = quantidadeAtual + quantidade;
 
     if (produtoSelecionado.estoque !== null && quantidadeTotal > produtoSelecionado.estoque) {
-      alert(`Estoque disponível para ${produtoSelecionado.nome}: ${produtoSelecionado.estoque}. Já adicionado ao pedido: ${quantidadeAtual}.`);
+      avisarErro(`Estoque disponível para ${produtoSelecionado.nome}: ${produtoSelecionado.estoque}. Já adicionado ao pedido: ${quantidadeAtual}.`);
       return;
     }
 
@@ -596,7 +582,7 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
     }
 
     setProdutoSelecionadoId("");
-    setQuantidade(1);
+    quantidadeCampo.resetar();
   }
 
   function removerProduto(itemId: number) {
@@ -606,10 +592,10 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
   function limparAtendimento() {
     setClienteSelecionadoId("");
     setProdutoSelecionadoId("");
-    setQuantidade(1);
+    quantidadeCampo.resetar();
     setItensPedido([]);
-    setDesconto(0);
-    setFrete(0);
+    descontoCampo.resetar();
+    freteCampo.resetar();
     setFormaPagamento("");
     setTransportadoraId("");
     setFuncionarioId("");
@@ -620,48 +606,52 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
   }
 
   async function finalizarPedido() {
-    if (salvando || falhaFechamento) {
+    if (salvando) {
       return;
     }
 
     if (!clienteSelecionado) {
-      alert("Selecione um cliente.");
+      avisarErro("Selecione um cliente.");
       return;
     }
     if (itensPedido.length === 0) {
-      alert("Adicione pelo menos um produto.");
+      avisarErro("Adicione pelo menos um produto.");
       return;
     }
     if (!formaPagamento) {
-      alert("Selecione a forma de pagamento.");
+      avisarErro("Selecione a forma de pagamento.");
       return;
     }
     if (!funcionarioId) {
-      alert("Selecione o funcionário responsável.");
+      avisarErro("Selecione o funcionário responsável.");
       return;
     }
     if (!transportadoraId || !Number.isInteger(Number(transportadoraId)) || Number(transportadoraId) <= 0) {
-      alert("Informe um ID de transportadora válido.");
+      avisarErro(
+        transportadorasCadastradas.length > 0
+          ? "Selecione a transportadora."
+          : "Informe um ID de transportadora válido.",
+      );
       return;
     }
     if (!dataEmissao) {
-      alert("Informe a data de emissão.");
+      avisarErro("Informe a data de emissão.");
       return;
     }
     if (dataEntrega && dataEntrega < dataEmissao) {
-      alert("A data de entrega não pode ser anterior à data de emissão.");
+      avisarErro("A data de entrega não pode ser anterior à data de emissão.");
       return;
     }
     if (!Number.isInteger(parcelas) || parcelas < 1 || parcelas > 12) {
-      alert("O parcelamento deve ser entre 1 e 12 vezes.");
+      avisarErro("O parcelamento deve ser entre 1 e 12 vezes.");
       return;
     }
-    if (desconto > subtotalPedido) {
-      alert("O desconto não pode ser maior que o subtotal dos itens.");
+    if (descontoPercentual < 0 || descontoPercentual > 100) {
+      avisarErro("O desconto deve ser entre 0% e 100%.");
       return;
     }
     if (!Number.isFinite(totalPedido) || totalPedido <= 0) {
-      alert("O total do pedido precisa ser maior que zero.");
+      avisarErro("O total do pedido precisa ser maior que zero.");
       return;
     }
 
@@ -675,7 +665,7 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
         produto.estoque !== null &&
         item.quantidade > produto.estoque
       ) {
-        alert(
+        avisarErro(
           `Estoque insuficiente para ${item.nome}: disponível ${produto.estoque} un.`,
         );
         return;
@@ -760,9 +750,11 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
         (item) => item.id === Number(transportadoraId),
       );
 
+      const codigoPedido = formatarCodigoPedido(vendaId, anoEmissao);
+
       setComprovante({
         vendaId,
-        codigo: formatarCodigoPedido(vendaId, anoEmissao),
+        codigo: codigoPedido,
         dataEmissao,
         dataEntrega,
         cliente: clienteSelecionado,
@@ -771,7 +763,8 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
           transportadora?.nome || `Transportadora #${transportadoraId}`,
         itens: [...itensPedido],
         subtotal: subtotalPedido,
-        desconto,
+        descontoPercentual,
+        desconto: valorDesconto,
         frete,
         total: totalPedido,
         formaPagamento,
@@ -781,9 +774,14 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
 
       setProximoPedidoId(vendaId + 1);
       setFalhaFechamento("");
-      limparFalhaFechamentoSalva();
       limparAtendimento();
       void carregarCadastros();
+
+      mostrar(
+        "sucesso",
+        "Venda confirmada!",
+        `${codigoPedido} foi registrado com sucesso.`,
+      );
     } catch (erro: unknown) {
       console.error("Erro ao registrar venda, itens ou pagamento:", erro);
 
@@ -792,11 +790,12 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
           ? `A venda #${vendaCriadaId} foi criada, mas uma etapa posterior falhou.`
           : "Não foi possível confirmar se a API criou a venda.";
 
-        const aviso = `${identificacao} ${descreverErro(erro)} Consulte a venda, os itens, o estoque e os pagamentos na API antes de liberar um novo pedido. Não reenvie esta operação.`;
+        // O aviso é informativo: não bloqueia a abertura de uma nova venda.
+        const aviso = `${identificacao} ${descreverErro(erro)} Confira na API o que já foi gravado antes de reenviar.`;
         setFalhaFechamento(aviso);
-        salvarFalhaFechamento(aviso);
+        avisarErro(aviso);
       } else {
-        alert(descreverErro(erro));
+        avisarErro(descreverErro(erro));
       }
     } finally {
       setSalvando(false);
@@ -836,23 +835,25 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
               <strong className="medium-h3">Fechamento interrompido</strong>
               <small>{falhaFechamento}</small>
             </div>
-            <button
-              type="button"
-              className="atendimento-aviso-acao"
-              onClick={() => {
-                const confirmou = window.confirm(
-                  "Só libere um novo pedido depois de conferir e reconciliar a venda anterior na API. Deseja continuar?",
-                );
-
-                if (confirmou) {
+            <div className="atendimento-aviso-acoes">
+              <button
+                type="button"
+                className="atendimento-aviso-acao"
+                onClick={() => {
                   limparAtendimento();
                   setFalhaFechamento("");
-                  limparFalhaFechamentoSalva();
-                }
-              }}
-            >
-              Já conferi; novo pedido
-            </button>
+                }}
+              >
+                Iniciar nova venda
+              </button>
+              <button
+                type="button"
+                className="atendimento-aviso-acao"
+                onClick={() => setFalhaFechamento("")}
+              >
+                Fechar aviso
+              </button>
+            </div>
           </div>
         )}
 
@@ -892,16 +893,22 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
               )}
             </div>
             <div className="atendimento-campo">
-              <label className="medium-h3" htmlFor="transportadora">ID da transportadora</label>
+              <label className="medium-h3" htmlFor="transportadora">Transportadora</label>
               {transportadorasCadastradas.length > 0 ? (
                 <select id="transportadora" value={transportadoraId} onChange={(evento) => setTransportadoraId(evento.target.value)}>
-                  <option value="">Selecione o ID da transportadora</option>
+                  <option value="">Selecione a transportadora</option>
                   {transportadorasCadastradas.map((transportadora) => (
-                    <option key={transportadora.id} value={transportadora.id}>{transportadora.id} — {transportadora.nome}</option>
+                    <option key={transportadora.id} value={transportadora.id}>
+                      {transportadora.id} — {transportadora.nome}
+                      {transportadora.contato ? ` · ${transportadora.contato}` : ""}
+                    </option>
                   ))}
                 </select>
               ) : (
-                <input id="transportadora" type="number" min="1" value={transportadoraId} onChange={(evento) => setTransportadoraId(evento.target.value)} placeholder="ID da transportadora" />
+                <>
+                  <input id="transportadora" type="number" min="1" value={transportadoraId} onChange={(evento) => setTransportadoraId(evento.target.value)} placeholder="ID da transportadora" />
+                  <small className="atendimento-dica">Nenhuma transportadora retornada pela API; informe o ID manualmente.</small>
+                </>
               )}
             </div>
           </div>
@@ -912,14 +919,6 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
           <div className="atendimento-grid atendimento-grid-cliente">
             <div className="atendimento-campo">
               <label className="medium-h3" htmlFor="cliente">Selecionar cliente</label>
-              <input
-                id="buscar-cliente"
-                type="search"
-                value={buscaCliente}
-                onChange={(evento) => setBuscaCliente(evento.target.value)}
-                placeholder="Buscar por nome, CPF, telefone ou e-mail"
-                aria-label="Buscar cliente"
-              />
               <select id="cliente" value={clienteSelecionadoId} onChange={(evento) => setClienteSelecionadoId(evento.target.value)}>
                 <option value="">Selecione um cliente</option>
                 {clientesParaSelecionar.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.nome} — {cliente.cpf}</option>)}
@@ -946,15 +945,6 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
           <div className="atendimento-produto">
             <div className="atendimento-campo">
               <label className="medium-h3" htmlFor="produto">Produto</label>
-              <input
-                id="buscar-produto"
-                type="search"
-                value={buscaProduto}
-                onChange={(evento) => setBuscaProduto(evento.target.value)}
-                placeholder="Buscar por produto ou código"
-                aria-label="Buscar produto"
-                disabled={carregandoProdutos}
-              />
               <select id="produto" value={produtoSelecionadoId} onChange={(evento) => setProdutoSelecionadoId(evento.target.value)} disabled={carregandoProdutos}>
                 <option value="">{carregandoProdutos ? "Carregando produtos..." : produtosCadastrados.length === 0 ? "Nenhum produto cadastrado na API" : "Selecione um produto"}</option>
                 {produtosParaSelecionar.map((produto) => (
@@ -986,7 +976,13 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
             </div>
             <div className="atendimento-campo">
               <label className="medium-h3" htmlFor="quantidade">Quantidade</label>
-              <input id="quantidade" type="number" min="1" max={estoqueSelecionado ?? undefined} value={quantidade} onChange={(evento) => setQuantidade(Number(evento.target.value))} />
+              <CampoNumero
+                id="quantidade"
+                texto={quantidadeCampo.texto}
+                aoAlterar={quantidadeCampo.alterar}
+                maximo={estoqueSelecionado ?? undefined}
+                ariaLabel="Quantidade de produtos"
+              />
             </div>
             <div className="atendimento-campo">
               <label className="medium-h3">Subtotal</label>
@@ -1082,8 +1078,29 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
           <aside className="atendimento-resumo">
             <h2 className="medium-h2">Resumo do pedido</h2>
             <div className="atendimento-resumo-linha"><span className="light-h3">Subtotal</span><strong className="medium-h3">{formatarDinheiro(subtotalPedido)}</strong></div>
-            <div className="atendimento-resumo-campo"><label className="light-h3" htmlFor="desconto">Desconto</label><input id="desconto" type="number" min="0" step="0.01" value={desconto} onChange={(evento) => setDesconto(paraValorMonetario(evento.target.value))} /></div>
-            <div className="atendimento-resumo-campo"><label className="light-h3" htmlFor="frete">Frete</label><input id="frete" type="number" min="0" step="0.01" value={frete} onChange={(evento) => setFrete(paraValorMonetario(evento.target.value))} /></div>
+            <div className="atendimento-resumo-campo">
+              <label className="light-h3" htmlFor="desconto">Desconto</label>
+              <CampoNumero
+                id="desconto"
+                texto={descontoCampo.texto}
+                aoAlterar={descontoCampo.alterar}
+                sufixo="%"
+                maximo={100}
+                ariaLabel="Desconto em porcentagem"
+              />
+            </div>
+            <div className="atendimento-resumo-linha"><span className="light-h3">Desconto aplicado</span><strong className="medium-h3">− {formatarDinheiro(valorDesconto)}</strong></div>
+            <div className="atendimento-resumo-campo">
+              <label className="light-h3" htmlFor="frete">Frete</label>
+              <CampoNumero
+                id="frete"
+                texto={freteCampo.texto}
+                aoAlterar={freteCampo.alterar}
+                prefixo="R$"
+                placeholder="0"
+                ariaLabel="Frete em reais"
+              />
+            </div>
             <div className="atendimento-resumo-linha"><span className="light-h3">Parcelas</span><strong className="medium-h3">{parcelas === 1 ? "À vista" : `${parcelas}x de ${formatarDinheiro(valoresParcelas[0] ?? 0)}`}</strong></div>
             <div className="atendimento-resumo-total"><span className="medium-h2">Total</span><strong className="bold-h1">{formatarDinheiro(totalPedido)}</strong></div>
           </aside>
@@ -1094,17 +1111,9 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
             <Button texto="Cancelar" cor="btn-secundaria" />
           </div>
           <div
-            className={
-              salvando || falhaFechamento
-                ? "atendimento-acao-bloqueada"
-                : ""
-            }
-            onClick={
-              salvando || falhaFechamento
-                ? undefined
-                : () => void finalizarPedido()
-            }
-            aria-disabled={salvando || Boolean(falhaFechamento)}
+            className={salvando ? "atendimento-acao-bloqueada" : ""}
+            onClick={salvando ? undefined : () => void finalizarPedido()}
+            aria-disabled={salvando}
           >
             <Button texto={salvando ? "Salvando..." : "Confirmar"} cor="btn-primaria" />
           </div>
@@ -1182,7 +1191,7 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
 
             <div className="atendimento-comprovante-totais">
               <div><span>Subtotal</span><strong>{formatarDinheiro(comprovante.subtotal)}</strong></div>
-              <div><span>Desconto</span><strong>− {formatarDinheiro(comprovante.desconto)}</strong></div>
+              <div><span>Desconto ({comprovante.descontoPercentual}%)</span><strong>− {formatarDinheiro(comprovante.desconto)}</strong></div>
               <div><span>Frete</span><strong>{formatarDinheiro(comprovante.frete)}</strong></div>
               <div className="atendimento-comprovante-total"><span>Total</span><strong>{formatarDinheiro(comprovante.total)}</strong></div>
             </div>
@@ -1223,6 +1232,8 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
           </article>
         </div>
       )}
+
+      <Notificacao notificacoes={notificacoes} aoFechar={fechar} />
     </section>
   );
 }

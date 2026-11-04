@@ -1,0 +1,68 @@
+.campo-numero {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+
+  overflow: hidden;
+
+  background-color: var(--w);
+  border-radius: 6px;
+
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.campo-numero-com-sufixo {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.campo-numero:focus-within {
+  background-color: var(--w);
+  box-shadow: 0 0 0 2px rgb(117 252 150 / 35%);
+}
+
+.campo-numero-prefixo,
+.campo-numero-sufixo {
+  height: 100%;
+  padding: 0 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #777780;
+
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h3);
+}
+
+.campo-numero input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+
+  border: none;
+  border-radius: 0;
+  outline: none;
+
+  color: var(--b);
+  background-color: var(--w);
+
+  font-family: "Montserrat", sans-serif;
+  font-size: var(--h3);
+}
+
+.campo-numero input:focus {
+  background-color: var(--w);
+  box-shadow: none;
+}
+
+.campo-numero input::placeholder {
+  color: #a2a2aa;
+}

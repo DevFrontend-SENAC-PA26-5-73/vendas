@@ -21,7 +21,7 @@ O projeto tem telas úteis para clientes, produtos, cargos, atendimento e estoqu
 
 ### P0 — Bloqueiam uma operação confiável
 
-1. **Venda pode ficar parcialmente gravada.** Em [Atendimento.tsx](src/components/Atendimento/Atendimento.tsx), o cliente grava a venda e, depois, faz chamadas separadas para cada item, saída de estoque e parcela. Se qualquer requisição falhar, ainda não há transação ou compensação no backend. O front-end agora bloqueia reenvio e mantém o aviso na sessão até a reconciliação ser confirmada; isso reduz duplicações acidentais, mas não torna as gravações atômicas.
+1. **Venda pode ficar parcialmente gravada.** Em [Atendimento.tsx](src/components/Atendimento/Atendimento.tsx), o cliente grava a venda e, depois, faz chamadas separadas para cada item, saída de estoque e parcela. Se qualquer requisição falhar, ainda não há transação ou compensação no backend. O front-end exibe um aviso com o detalhe da falha e libera a abertura de uma nova venda ou o reenvio; como não existe garantia no backend, ainda é possível duplicar registros.
 2. **Totais podem divergir entre itens e venda.** O atendimento calcula desconto e frete e usa o total ajustado para pagamentos, mas o corpo de `/vendas` não os envia. O dashboard agora prioriza os pagamentos quando disponíveis; os itens continuam registrados pelo preço cheio, então outras consultas/relatórios baseados em itens ainda podem divergir. Ver [Atendimento.tsx](src/components/Atendimento/Atendimento.tsx) e [Dashboard.tsx](src/components/Dashboard/Dashboard.tsx).
 3. **Contrato da API não está validado para o fluxo crítico.** Nos exemplos enviados, a criação de venda retorna `404` para transportadora, a criação de item de venda retorna `500` e a criação de funcionário também retorna `500`. São respostas observadas no ambiente/documentação fornecidos, não uma inspeção do backend; ainda assim, impedem considerar o fluxo pronto até que sejam reproduzidas e resolvidas.
 
@@ -66,7 +66,7 @@ O projeto tem telas úteis para clientes, produtos, cargos, atendimento e estoqu
 - Definir DTOs e respostas oficiais para produtos, clientes, funcionários, transportadoras, vendas, itens, pagamentos e movimentações. Incluir a rota de transportadoras ou remover a dependência de IDs não selecionáveis.
 - Implementar no backend uma operação transacional de fechamento de venda que valide estoque e persista venda, itens, pagamentos, frete e desconto de uma vez. Torná-la idempotente para impedir duplicação em repetição.
 - Tornar o backend a fonte de verdade para preço final, arredondamento, estoque e totais; alinhar atendimento, comprovante e dashboard à mesma regra.
-- O front-end agora bloqueia reenvio após falha e exige confirmação para liberar outro pedido; ainda é necessário implementar transação/idempotência no backend e consulta/reconciliação confiável do estado.
+- O front-end informa a falha do fechamento sem bloquear a próxima venda; ainda é necessário implementar transação/idempotência no backend e consulta/reconciliação confiável do estado.
 
 ### Etapa 2 — Completar o fluxo operacional
 
@@ -106,7 +106,13 @@ O projeto tem telas úteis para clientes, produtos, cargos, atendimento e estoqu
 - Adicionado acesso à tela de Funcionários e navegação horizontal para telas estreitas.
 - Rotas carregadas sob demanda; gráfico do dashboard substituído por barras CSS e removidas as dependências de gráficos sem uso.
 - Dashboard deixou de representar despesas, lucro e origem ausentes como zero; pagamentos persistidos têm prioridade no total exibido por venda.
-- Após falha no fechamento, o atendimento mantém bloqueio de novo envio em `sessionStorage` até a pessoa confirmar que reconciliou o registro. Isso é uma proteção de interface, não substitui transação ou idempotência da API.
+- Após falha no fechamento, o atendimento exibe um aviso com o erro e oferece "Iniciar nova venda" ou "Fechar aviso"; o bloqueio em `sessionStorage` e a confirmação obrigatória foram removidos a pedido do time.
+- Atendimento sem campos de pesquisa local de cliente e produto (as listas são selecionadas por `<select>`); a pesquisa do cabeçalho continua filtrando essas listas.
+- Frete e desconto passam a aceitar apenas valores inteiros em reais, sem centavos.
+- Atendimento agora lista as transportadoras vindas da rota `/transportadora` (a rota `/transportadoras` responde 404) e permite selecionar por lista, igual ao funcionário; a falha dessa rota passa a ser avisada.
+- O desconto do atendimento passou a ser informado em porcentagem (0% a 100%) e o frete ganhou formatação em reais (prefixo `R$`); as setas de aumento/diminuição desses campos foram removidas.
+- Criado o componente `CampoNumero` (`src/components/CampoNumero/`), usado no atendimento em quantidade, desconto e frete: o valor inicial continua visível, mas o zero inicial não é mais somado ao número digitado (o campo é selecionado ao focar e zeros à esquerda são removidos).
+- Criado o componente `Notificacao` (`src/components/Notificacao/`), usado no Atendimento: aviso de "Deu erro" em falhas de validação e de gravação, e aviso de "Venda confirmada" após o fechamento bem-sucedido.
 - O chunk principal passou de aproximadamente 1,29 MB para cerca de 230 kB; o dashboard passou de aproximadamente 931 kB para cerca de 12 kB.
 
 ## Limites e preservação do workspace
