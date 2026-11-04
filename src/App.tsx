@@ -1,8 +1,5 @@
 import { lazy, Suspense, useState } from "react";
 
-import Cargo from "./components/Cargo/Cargo";
-import Funcionario from "./components/Funcionario/Funcionario";
-
 import "./App.css";
 
 import Cabecalho from "./components/Cabecalho/Cabecalho";
@@ -48,10 +45,6 @@ function App() {
       case "Movimentação":
         return <Movimentacao buscaGlobal={buscaGlobal} />;
 
-      case "Inventário":
-      case "Inventario":
-        return <Inventario />;
-
       case "Produtos":
         return <Produtos buscaGlobal={buscaGlobal} />;
 
@@ -62,6 +55,7 @@ function App() {
       case "Funcionário":
         return <Funcionario buscaGlobal={buscaGlobal} />;
 
+      case "Inventário":
       case "Inventario":
         return <Inventario buscaGlobal={buscaGlobal} />;
 
@@ -73,7 +67,11 @@ function App() {
   return (
     <div className="app">
       <header className="app-cabecalho">
-        <Cabecalho busca={buscaGlobal} aoAlterarBusca={setBuscaGlobal} />
+        <Cabecalho
+          busca={buscaGlobal}
+          aoAlterarBusca={setBuscaGlobal}
+          aoMudarPagina={mudarPagina}
+        />
       </header>
 
       <aside className="app-menu">
