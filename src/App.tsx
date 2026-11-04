@@ -1,6 +1,10 @@
 import { lazy, Suspense, useState } from "react";
 
+import Cargo from "./components/Cargo/Cargo";
+import Funcionario from "./components/Funcionario/Funcionario";
+
 import "./App.css";
+
 import Cabecalho from "./components/Cabecalho/Cabecalho";
 import MenuLateral from "./components/MenuLateral/MenuLateral";
 
@@ -43,6 +47,10 @@ function App() {
 
       case "Movimentação":
         return <Movimentacao buscaGlobal={buscaGlobal} />;
+
+      case "Inventário":
+      case "Inventario":
+        return <Inventario />;
 
       case "Produtos":
         return <Produtos buscaGlobal={buscaGlobal} />;

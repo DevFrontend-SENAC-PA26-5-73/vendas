@@ -47,21 +47,19 @@ type EstoqueApi = {
   preco: number;
 };
 
-type ItemInventario = {
+const ESTOQUE_MINIMO = 5;
+
+type Produto = {
   id: number;
   nome: string;
   descricao: string;
-  codigoBarra: string;
+  codigo_barra: string;
+  quantidade: number;
   tipo: string;
   preco: number;
-  quantidade: number;
 };
 
-type FiltroSituacao =
-  | "todos"
-  | "normal"
-  | "baixo"
-  | "sem-estoque";
+type Situacao = "disponivel" | "baixo" | "esgotado";
 
 type ColunaOrdenacaoInventario =
   | "codigo" | "nome" | "categoria" | "descricao" | "quantidade"
@@ -73,35 +71,8 @@ type Mensagem = {
   texto: string;
 };
 
-type ApiErro = {
-  message?: string | string[];
-  error?: string;
-};
-
-const LIMITE_ESTOQUE_BAIXO = 5;
-
-function normalizarLista<T>(dados: unknown): T[] {
-  if (Array.isArray(dados)) {
-    return dados as T[];
-  }
-
-  if (dados && typeof dados === "object" && "data" in dados) {
-    const data = (dados as { data?: unknown }).data;
-
-    if (Array.isArray(data)) {
-      return data as T[];
-    }
-  }
-
-  return [];
-}
-
-function formatarNumero(valor: number) {
-  return Number(valor || 0).toLocaleString("pt-BR", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-}
+/* =========================
+   Normalização dos dados
 
 function formatarMoeda(valor: number) {
   return Number(valor || 0).toLocaleString("pt-BR", {
@@ -112,67 +83,17 @@ function formatarMoeda(valor: number) {
   });
 }
 
-function obterMensagemApi(dados: unknown) {
-  if (!dados) {
-    return "";
-  }
-
-  if (typeof dados === "string") {
-    return dados;
-  }
-
-  if (typeof dados !== "object") {
-    return "";
-  }
-
-  const erro = dados as ApiErro;
-
-  if (Array.isArray(erro.message)) {
-    return erro.message.join(", ");
-  }
-
-  if (typeof erro.message === "string") {
-    return erro.message;
-  }
-
-  if (typeof erro.error === "string") {
-    return erro.error;
-  }
-
-  return "";
+function formatarNumero(valor: number) {
+  return Number(valor || 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
 }
 
-function diagnosticarErro(erro: unknown): Mensagem {
-  if (!axios.isAxiosError(erro)) {
-    return {
-      tipo: "erro",
-      codigo: "INV-U001",
-      texto:
-        erro instanceof Error
-          ? erro.message
-          : "Erro inesperado ao carregar o inventário.",
-    };
-  }
-
-  if (!erro.response) {
-    return {
-      tipo: "erro",
-      codigo: "INV-N001",
-      texto:
-        "A API não respondeu. Verifique a rede, o endereço local e o CORS.",
-    };
-  }
-
-  const status = erro.response.status;
-  const detalhe = obterMensagemApi(erro.response.data);
-
-  return {
-    tipo: "erro",
-    codigo: `INV-A${status}`,
-    texto:
-      detalhe ||
-      `A API respondeu com erro ${status} ao carregar o inventário.`,
-  };
+function classificarEstoque(quantidade: number): Situacao {
+  if (quantidade <= 0) return "esgotado";
+  if (quantidade <= ESTOQUE_MINIMO) return "baixo";
+  return "disponivel";
 }
 
 function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
@@ -213,31 +134,19 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
         respostaProdutos.data,
       );
 
-      const estoque = normalizarLista<EstoqueApi>(
-        respostaEstoque.data,
+      const listaProdutos = normalizarProdutos(
+        await respostaProdutos.value.json(),
       );
 
-      const estoquePorProduto = new Map(
-        estoque.map((registro) => [
-          Number(registro.id),
-          Number(registro.quantidade ?? 0),
-        ]),
-      );
+      // A rota /estoque é opcional: quando responde, a quantidade dela
+      // tem prioridade sobre a quantidade cadastrada no produto.
+      let quantidadesEstoque = new Map<number, number>();
 
-      const inventario: ItemInventario[] = produtos.map(
-        (produto) => ({
-          id: Number(produto.id),
-          nome: produto.nome,
-          descricao: produto.descricao ?? "",
-          codigoBarra:
-            produto.codigo_barra ?? "Não informado",
-          tipo: produto.tipo,
-          preco: Number(produto.preco ?? 0),
-          quantidade:
-            estoquePorProduto.get(Number(produto.id)) ??
-            Number(produto.quantidade ?? 0),
-        }),
-      );
+      if (respostaEstoque.status === "fulfilled" && respostaEstoque.value.ok) {
+        quantidadesEstoque = normalizarEstoque(
+          await respostaEstoque.value.json(),
+        );
+      }
 
       setItens(inventario);
       setMensagem(null);
@@ -245,16 +154,21 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
       console.group("[INVENTARIO] Erro ao carregar dados");
       console.error(erro);
 
-      if (axios.isAxiosError(erro)) {
-        console.log("Método:", erro.config?.method);
-        console.log("URL:", erro.config?.url);
-        console.log("Status:", erro.response?.status);
-        console.log("Resposta:", erro.response?.data);
-      }
+      listaCompleta.sort((primeiro, segundo) =>
+        primeiro.nome.localeCompare(segundo.nome, "pt-BR"),
+      );
 
-      console.groupEnd();
-      setItens([]);
-      exibirErro(diagnosticarErro(erro));
+      setProdutos(listaCompleta);
+      setAtualizadoEm(new Date());
+    } catch (erroDesconhecido) {
+      console.error("Erro ao carregar inventário:", erroDesconhecido);
+
+      setProdutos([]);
+      setErro(
+        erroDesconhecido instanceof Error
+          ? erroDesconhecido.message
+          : "Não foi possível carregar o inventário.",
+      );
     } finally {
       setCarregando(false);
     }
@@ -269,7 +183,7 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
   }, [carregarInventario]);
 
   useEffect(() => {
-    function atualizarInventario() {
+    function atualizar() {
       void carregarInventario();
     }
     window.addEventListener(
@@ -282,14 +196,8 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
     );
 
     return () => {
-      window.removeEventListener(
-        "produtos-atualizados",
-        atualizarInventario,
-      );
-      window.removeEventListener(
-        "estoque-atualizado",
-        atualizarInventario,
-      );
+      window.removeEventListener("estoque-atualizado", atualizar);
+      window.removeEventListener("produtos-atualizados", atualizar);
     };
   }, [carregarInventario]);
 
@@ -344,35 +252,35 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
   }, [itens]);
 
   const resumo = useMemo(() => {
-    const unidades = itens.reduce(
-      (total, item) => total + item.quantidade,
-      0,
+    return produtos.reduce(
+      (total, produto) => {
+        const situacao = classificarEstoque(produto.quantidade);
+
+        return {
+          unidades: total.unidades + produto.quantidade,
+          valor: total.valor + produto.quantidade * produto.preco,
+          disponiveis:
+            total.disponiveis + (situacao === "disponivel" ? 1 : 0),
+          alertas:
+            total.alertas + (situacao === "disponivel" ? 0 : 1),
+        };
+      },
+      {
+        unidades: 0,
+        valor: 0,
+        disponiveis: 0,
+        alertas: 0,
+      },
+    );
+  }, [produtos]);
+
+  const categorias = useMemo(() => {
+    const valores = new Set(
+      produtos.map((produto) => produto.tipo.trim()).filter(Boolean),
     );
 
-    const valorEstoque = itens.reduce(
-      (total, item) =>
-        total + item.quantidade * item.preco,
-      0,
-    );
-
-    const estoqueBaixo = itens.filter(
-      (item) =>
-        item.quantidade > 0 &&
-        item.quantidade <= LIMITE_ESTOQUE_BAIXO,
-    ).length;
-
-    const semEstoque = itens.filter(
-      (item) => item.quantidade === 0,
-    ).length;
-
-    return {
-      produtos: itens.length,
-      unidades,
-      valorEstoque,
-      estoqueBaixo,
-      semEstoque,
-    };
-  }, [itens]);
+    return Array.from(valores).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [produtos]);
 
   const itensFiltrados = useMemo(() => {
     const termos = [busca, buscaGlobal]
@@ -401,25 +309,15 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
       );
 
       const correspondeCategoria =
-        categoria === "todas" || item.tipo === categoria;
+        filtroCategoria === "todas" ||
+        produto.tipo.toLowerCase() === filtroCategoria.toLowerCase();
 
-      let correspondeSituacao = true;
-
-      if (situacao === "normal") {
-        correspondeSituacao =
-          item.quantidade > LIMITE_ESTOQUE_BAIXO;
-      } else if (situacao === "baixo") {
-        correspondeSituacao =
-          item.quantidade > 0 &&
-          item.quantidade <= LIMITE_ESTOQUE_BAIXO;
-      } else if (situacao === "sem-estoque") {
-        correspondeSituacao = item.quantidade === 0;
-      }
+      const correspondeSituacao =
+        filtroSituacao === "todas" ||
+        classificarEstoque(produto.quantidade) === filtroSituacao;
 
       return (
-        correspondeBusca &&
-        correspondeCategoria &&
-        correspondeSituacao
+        correspondeBusca && correspondeCategoria && correspondeSituacao
       );
     });
   }, [itens, busca, buscaGlobal, categoria, situacao]);
@@ -454,19 +352,15 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
   return (
     <section className="inventario">
       <header className="inventario-cabecalho">
-        <div className="inventario-cabecalho-conteudo">
-          <span className="inventario-cabecalho-icone">
-            <Boxes size={26} />
-          </span>
+        <div className="inventario-cabecalho-texto">
+          <span className="inventario-cabecalho-icone">▦</span>
 
           <div>
-            <h1 className="medium-h1">
-              Inventário de estoque
-            </h1>
+            <h1 className="medium-h1">Inventário</h1>
 
             <p className="light-h3">
-              Consulte os produtos e as quantidades
-              atualmente registradas no estoque.
+              Consulte a quantidade, o valor e a situação de cada produto em
+              estoque.
             </p>
           </div>
         </div>
@@ -498,91 +392,52 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
           <strong>{mensagem.codigo}: </strong>
           {mensagem.texto}
         </div>
-      )}
+      </header>
 
       <div className="inventario-resumo">
-        <article className="inventario-card">
-          <span className="inventario-card-icone">
-            <PackageSearch size={20} />
-          </span>
-
-          <div>
-            <span className="light-h3">
-              Produtos cadastrados
-            </span>
-            <strong className="bold-h2">
-              {formatarNumero(resumo.produtos)}
-            </strong>
-          </div>
+        <article className="inventario-resumo-card">
+          <span className="light-h3">Produtos cadastrados</span>
+          <strong className="bold-h2">
+            {formatarNumero(produtos.length)}
+          </strong>
+          <small>Itens diferentes no catálogo</small>
         </article>
 
-        <article className="inventario-card">
-          <span className="inventario-card-icone">
-            <Warehouse size={20} />
-          </span>
-
-          <div>
-            <span className="light-h3">
-              Unidades em estoque
-            </span>
-            <strong className="bold-h2">
-              {formatarNumero(resumo.unidades)}
-            </strong>
-          </div>
+        <article className="inventario-resumo-card">
+          <span className="light-h3">Unidades em estoque</span>
+          <strong className="bold-h2">{formatarNumero(resumo.unidades)}</strong>
+          <small>Soma das quantidades disponíveis</small>
         </article>
 
-        <article className="inventario-card inventario-card-alerta">
-          <span className="inventario-card-icone">
-            <AlertTriangle size={20} />
-          </span>
-
-          <div>
-            <span className="light-h3">
-              Estoque baixo
-            </span>
-            <strong className="bold-h2">
-              {formatarNumero(resumo.estoqueBaixo)}
-            </strong>
-            <small>
-              Produtos com até {LIMITE_ESTOQUE_BAIXO}{" "}
-              unidades
-            </small>
-          </div>
+        <article className="inventario-resumo-card">
+          <span className="light-h3">Valor do inventário</span>
+          <strong className="bold-h2">{formatarMoeda(resumo.valor)}</strong>
+          <small>Quantidade × preço unitário</small>
         </article>
 
-        <article className="inventario-card inventario-card-alerta">
-          <span className="inventario-card-icone">
-            <AlertTriangle size={20} />
-          </span>
-
-          <div>
-            <span className="light-h3">
-              Sem estoque
-            </span>
-            <strong className="bold-h2">
-              {formatarNumero(resumo.semEstoque)}
-            </strong>
-          </div>
-        </article>
-
-        <article className="inventario-card inventario-card-valor">
-          <div>
-            <span className="light-h3">
-              Valor estimado do estoque
-            </span>
-            <strong className="bold-h2">
-              {formatarMoeda(resumo.valorEstoque)}
-            </strong>
-          </div>
+        <article
+          className={`inventario-resumo-card inventario-resumo-alerta ${
+            resumo.alertas > 0 ? "inventario-resumo-alerta-ativo" : ""
+          }`}
+        >
+          <span className="light-h3">Itens em alerta</span>
+          <strong className="bold-h2">
+            {formatarNumero(resumo.alertas)}
+          </strong>
+          <small>Esgotados ou com {ESTOQUE_MINIMO} unidades ou menos</small>
         </article>
       </div>
+
+      {erro && (
+        <div className="inventario-mensagem" role="alert">
+          {erro}
+        </div>
+      )}
 
       <article className="inventario-painel">
         <div className="inventario-painel-topo">
           <div>
-            <h2 className="medium-h2">
-              Produtos no inventário
-            </h2>
+            <h2 className="medium-h2">Posição de estoque</h2>
 
             <p className="light-h3">
               Consulte os saldos e zere o estoque de produtos descontinuados. O cadastro e o histórico de vendas serão preservados.
@@ -597,58 +452,16 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
               type="search"
               value={busca}
               onChange={(evento) =>
-                setBusca(evento.target.value)
+                setFiltroSituacao(evento.target.value as "todas" | Situacao)
               }
-              placeholder="Buscar por produto ou código"
-              aria-label="Buscar no inventário"
-            />
+              aria-label="Filtrar por situação"
+            >
+              <option value="todas">Todas as situações</option>
+              <option value="disponivel">Disponível</option>
+              <option value="baixo">Estoque baixo</option>
+              <option value="esgotado">Esgotado</option>
+            </select>
           </div>
-
-          <select
-            className="inventario-select"
-            value={categoria}
-            onChange={(evento) =>
-              setCategoria(evento.target.value)
-            }
-            aria-label="Filtrar por categoria"
-          >
-            <option value="todas">
-              Todas as categorias
-            </option>
-
-            {categorias.map((itemCategoria) => (
-              <option
-                key={itemCategoria}
-                value={itemCategoria}
-              >
-                {itemCategoria}
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="inventario-select"
-            value={situacao}
-            onChange={(evento) =>
-              setSituacao(
-                evento.target.value as FiltroSituacao,
-              )
-            }
-            aria-label="Filtrar por situação"
-          >
-            <option value="todos">
-              Todas as situações
-            </option>
-            <option value="normal">
-              Estoque normal
-            </option>
-            <option value="baixo">
-              Estoque baixo
-            </option>
-            <option value="sem-estoque">
-              Sem estoque
-            </option>
-          </select>
         </div>
 
         <div className="inventario-tabela-container">
@@ -706,48 +519,39 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
                   }
 
                   return (
-                    <tr key={item.id}>
-                      <td className="inventario-codigo">
-                        {item.codigoBarra}
-                      </td>
-
+                    <tr key={produto.id}>
                       <td>
                         <div className="inventario-produto">
                           <span className="inventario-produto-avatar">
-                            {item.nome
-                              .charAt(0)
-                              .toUpperCase()}
+                            {produto.nome.charAt(0).toUpperCase()}
                           </span>
-                          <strong>{item.nome}</strong>
+
+                          <div className="inventario-produto-texto">
+                            <strong>{produto.nome}</strong>
+
+                            {produto.descricao && (
+                              <small title={produto.descricao}>
+                                {produto.descricao}
+                              </small>
+                            )}
+                          </div>
                         </div>
                       </td>
 
-                      <td>{item.tipo}</td>
-
-                      <td
-                        className="inventario-descricao"
-                        title={item.descricao}
-                      >
-                        {item.descricao || "Sem descrição"}
-                      </td>
-
+                      <td>{produto.tipo || "Não informada"}</td>
+                      <td>{produto.codigo_barra || "Não informado"}</td>
                       <td className="inventario-quantidade">
-                        {formatarNumero(item.quantidade)} un.
+                        {formatarNumero(produto.quantidade)} un.
                       </td>
-
-                      <td>{formatarMoeda(item.preco)}</td>
-
+                      <td>{formatarMoeda(produto.preco)}</td>
                       <td className="inventario-valor">
-                        {formatarMoeda(
-                          item.quantidade * item.preco,
-                        )}
+                        {formatarMoeda(produto.quantidade * produto.preco)}
                       </td>
-
                       <td>
                         <span
-                          className={`inventario-status ${classeSituacao}`}
+                          className={`inventario-situacao inventario-situacao-${situacao}`}
                         >
-                          {situacaoItem}
+                          {rotuloSituacao[situacao]}
                         </span>
                       </td>
                       <td>
