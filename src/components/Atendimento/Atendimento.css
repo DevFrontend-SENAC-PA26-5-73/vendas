@@ -116,6 +116,13 @@
   cursor: pointer;
 }
 
+.atendimento-aviso-acoes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .atendimento-aviso-acao:hover {
   background-color: rgb(255 255 255 / 45%);
 }
@@ -493,6 +500,19 @@
 
 .atendimento-resumo-campo input {
   background-color: var(--w);
+}
+
+/* Remove as setas de aumento e decrease dos campos numéricos */
+.atendimento input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.atendimento input[type="number"]::-webkit-outer-spin-button,
+.atendimento input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+
+  -webkit-appearance: none;
 }
 
 .atendimento-resumo-total {
