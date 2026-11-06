@@ -35,7 +35,7 @@ O projeto tem telas úteis para clientes, produtos, cargos, atendimento e estoqu
 
 ### P2 — Qualidade e sustentação
 
-9. **Integração HTTP fragmentada.** [lib/api.ts](src/lib/api.ts) oferece cliente e erro comuns, mas clientes, produtos, inventário, cargos, funcionários e dashboard ainda combinam `fetch`/Axios, tratamento de erro e parsing próprios. Isso gera mensagens e comportamentos diferentes, além de facilitar divergência na configuração da API.
+9. **Integração HTTP fragmentada.** Corrigido nesta rodada: todas as telas usam a instância Axios central de [Api/Api.ts](src/Api/Api.ts), único lugar onde o endereço-base da API é definido. Clientes, produtos, inventário, cargos, funcionários, dashboard, movimentação, atendimento e cabeçalho não declaram mais URLs, `fetch` ou instâncias de Axios próprias; apenas o ViaCEP (serviço externo) continua usando `fetch`.
 10. **Não há suíte de testes automatizados.** Não foram encontrados arquivos de teste nem script `test` em `package.json`. Build e lint não validam regras de preço, CPF, parcelas, estoque ou falha parcial de venda.
 11. **Código interno e código de barras estão conceitualmente misturados.** Produtos cria 13 dígitos aleatórios no front-end e os salva em `codigo_barra`; não calcula dígito verificador EAN-13, e unicidade é conferida apenas na lista carregada pelo navegador. Definir se o campo é código interno ou GTIN/barcode e fazer a unicidade ser garantida pelo backend.
 12. **Dados são carregados integralmente.** Listas são baixadas e filtradas no navegador; não há paginação. O custo cresce com o volume e o dashboard faz três consultas separadas. A aplicação também não define metas de tempo de resposta ou monitoramento.

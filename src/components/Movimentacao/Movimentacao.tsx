@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
-import { apiRequest, descreverErro } from "../../lib/api";
+import api, { descreverErro } from "../../Api/Api";
 import type {
   MovimentacaoEstoque,
   MovimentacaoPayload,
@@ -231,8 +231,10 @@ function Movimentacao({ buscaGlobal }: { buscaGlobal: string }) {
   const carregarDados = useCallback(async (signal?: AbortSignal) => {
     try {
       const [listaProdutos, listaMovimentacoes] = await Promise.all([
-        apiRequest<Produto[]>("/produtos", { signal }),
-        apiRequest<MovimentacaoEstoque[]>("/fluxo-caixa", { signal }),
+        api.get<Produto[]>("/produtos", { signal }).then((r) => r.data),
+        api
+          .get<MovimentacaoEstoque[]>("/fluxo-caixa", { signal })
+          .then((r) => r.data),
       ]);
 
       if (signal?.aborted) return;
@@ -346,17 +348,13 @@ function Movimentacao({ buscaGlobal }: { buscaGlobal: string }) {
         precoVendaMinimo !== null &&
         precoVendaMinimo > produtoSelecionado.preco
       ) {
-        await apiRequest(`/produtos/${produtoId}`, {
-          method: "PATCH",
-          body: JSON.stringify({ preco: precoVendaMinimo }),
+        await api.patch(`/produtos/${produtoId}`, {
+          preco: precoVendaMinimo,
         });
         precoAtualizado = true;
       }
 
-      await apiRequest<MovimentacaoEstoque>("/fluxo-caixa", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      await api.post<MovimentacaoEstoque>("/fluxo-caixa", payload);
 
       setFormulario(formularioInicial);
       setMensagem({

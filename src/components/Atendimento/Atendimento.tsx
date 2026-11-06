@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { apiRequest, API_BASE_URL, descreverErro } from "../../lib/api";
+import api, { API_URL, descreverErro } from "../../Api/Api";
 import SortableHeader from "../SortableHeader/SortableHeader";
 import { ordenarLista } from "../../lib/ordenacao";
 import type { DirecaoOrdenacao } from "../../lib/ordenacao";
@@ -370,7 +370,7 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
   const proximoItemId = useRef(1);
 
   /**
-   * Todas as listas vêm do mesmo servidor (VITE_API_URL). As respostas são
+   * Todas as listas vêm do mesmo servidor (src/Api/Api.ts). As respostas são
    * normalizadas porque a API pode devolver campos com nomes diferentes.
    */
   const carregarCadastros = useCallback(async () => {
@@ -378,11 +378,11 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
 
     const [clientes, funcionarios, transportadoras, produtos, vendas] =
       await Promise.allSettled([
-        apiRequest<unknown>(API_CLIENTES_URL),
-        apiRequest<unknown>(API_FUNCIONARIOS_URL),
-        apiRequest<unknown>(API_TRANSPORTADORAS_URL),
-        apiRequest<unknown>(API_PRODUTOS_URL),
-        apiRequest<unknown>(API_VENDAS_URL),
+        api.get<unknown>(API_CLIENTES_URL).then((r) => r.data),
+        api.get<unknown>(API_FUNCIONARIOS_URL).then((r) => r.data),
+        api.get<unknown>(API_TRANSPORTADORAS_URL).then((r) => r.data),
+        api.get<unknown>(API_PRODUTOS_URL).then((r) => r.data),
+        api.get<unknown>(API_VENDAS_URL).then((r) => r.data),
       ]);
 
     const falhas: string[] = [];
@@ -680,17 +680,14 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
       setErroCarregamento("");
 
       envioIniciado = true;
-      const respostaVenda = await apiRequest<unknown>(API_VENDAS_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          id_status: "pendente",
-          cliente_id: clienteSelecionado.id,
-          transportadoras_id: Number(transportadoraId),
-          funcionarios_id: Number(funcionarioId),
-        }),
+      const respostaVenda = await api.post<unknown>(API_VENDAS_URL, {
+        id_status: "pendente",
+        cliente_id: clienteSelecionado.id,
+        transportadoras_id: Number(transportadoraId),
+        funcionarios_id: Number(funcionarioId),
       });
 
-      const corpoVenda = comoObjeto(respostaVenda);
+      const corpoVenda = comoObjeto(respostaVenda.data);
       const venda =
         comoObjeto(corpoVenda?.data) ?? comoObjeto(corpoVenda?.venda) ?? corpoVenda;
       const vendaId = Number(venda?.id);
@@ -703,26 +700,20 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
 
       // Registra cada produto do pedido e a saída correspondente no estoque
       for (const item of itensPedido) {
-        await apiRequest<unknown>(API_ITENS_VENDA_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            quantidade: item.quantidade,
-            preco: Number(item.precoUnitario.toFixed(2)),
-            vendas_id: vendaId,
-            produtos_id: item.produtoId,
-          }),
+        await api.post<unknown>(API_ITENS_VENDA_URL, {
+          quantidade: item.quantidade,
+          preco: Number(item.precoUnitario.toFixed(2)),
+          vendas_id: vendaId,
+          produtos_id: item.produtoId,
         });
 
-        await apiRequest<unknown>("/fluxo-caixa", {
-          method: "POST",
-          body: JSON.stringify({
-            tipo: "saida",
-            produto_id: item.produtoId,
-            quantidade: item.quantidade,
-            preco_unitario: Number(item.precoUnitario.toFixed(2)),
-            descricao: `Venda ${formatarCodigoPedido(vendaId, anoEmissao)} — ${clienteSelecionado.nome}`,
-            venda_id: vendaId,
-          }),
+        await api.post<unknown>("/fluxo-caixa", {
+          tipo: "saida",
+          produto_id: item.produtoId,
+          quantidade: item.quantidade,
+          preco_unitario: Number(item.precoUnitario.toFixed(2)),
+          descricao: `Venda ${formatarCodigoPedido(vendaId, anoEmissao)} — ${clienteSelecionado.nome}`,
+          venda_id: vendaId,
         });
       }
 
@@ -731,15 +722,12 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
         formaPagamento === "boleto" ? "pendente" : "aprovado";
 
       for (const [indice, valor] of valoresParcelas.entries()) {
-        await apiRequest<unknown>(API_PAGAMENTOS_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            metodo_pagamento: formaPagamento,
-            valo_pagamento: valor,
-            status_pagamento: statusPagamento,
-            data_pagamento: somarMeses(dataEmissao, indice),
-            vendas_id: vendaId,
-          }),
+        await api.post<unknown>(API_PAGAMENTOS_URL, {
+          metodo_pagamento: formaPagamento,
+          valo_pagamento: valor,
+          status_pagamento: statusPagamento,
+          data_pagamento: somarMeses(dataEmissao, indice),
+          vendas_id: vendaId,
         });
       }
 
@@ -817,7 +805,7 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
           <div className="atendimento-aviso atendimento-aviso-erro" role="alert">
             <div>
               <strong className="medium-h3">{erroCarregamento}</strong>
-              <small>Servidor: {API_BASE_URL}</small>
+              <small>Servidor: {API_URL}</small>
             </div>
             <button
               type="button"
@@ -957,7 +945,7 @@ function Atendimento({ buscaGlobal }: { buscaGlobal: string }) {
               </select>
               {!carregandoProdutos && produtosCadastrados.length === 0 && (
                 <small className="atendimento-dica">
-                  A API {API_BASE_URL} não retornou produtos. Cadastre um produto ou ajuste VITE_API_URL.
+                  A API {API_URL} não retornou produtos. Cadastre um produto ou ajuste o endereço em src/Api/Api.ts.
                 </small>
               )}
               {!carregandoProdutos && produtosCadastrados.length > 0 && produtosCadastrados.every((produto) => produto.estoque !== null && produto.estoque <= 0) && (

@@ -6,9 +6,7 @@ import { ordenarLista } from "../../lib/ordenacao";
 import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 import "./Cargo.css";
 
-import { API_BASE_URL } from "../../lib/api";
-
-const API_URL = `${API_BASE_URL}/cargo`;
+import api, { statusHttp } from "../../Api/Api";
 
 interface CargoItem {
   id: number | string;
@@ -22,26 +20,40 @@ interface Aviso {
   texto: string;
 }
 
-async function requisicao<T = unknown>(
-  caminho = "",
-  opcoes: RequestInit = {}
-): Promise<T | null> {
-  const resposta = await fetch(`${API_URL}${caminho}`, {
-    ...opcoes,
-    headers: { "Content-Type": "application/json", ...opcoes.headers },
-  });
+const MENSAGENS_ERRO: Record<number, string> = {
+  400: "Dados inválidos.",
+  404: "Cargo não encontrado.",
+};
 
-  if (!resposta.ok) {
-    const mensagens: Record<number, string> = {
-      400: "Dados inválidos.",
-      404: "Cargo não encontrado.",
-    };
-    throw new Error(mensagens[resposta.status] ?? "Erro inesperado. Tente novamente.");
+function mensagemDeErro(erro: unknown): string {
+  const status = statusHttp(erro);
+
+  if (status === 0) {
+    return erro instanceof Error
+      ? erro.message
+      : "Erro inesperado. Tente novamente.";
   }
 
+  return MENSAGENS_ERRO[status] ?? "Erro inesperado. Tente novamente.";
+}
+
+async function requisicao<T = unknown>(
+  metodo: "GET" | "POST" | "PATCH" | "DELETE",
+  caminho = "",
+  corpo?: unknown,
+): Promise<T | null> {
+  const resposta = await api.request<T>({
+    url: `/cargo${caminho}`,
+    method: metodo,
+    data: corpo,
+  });
+
   // DELETE pode não devolver corpo
-  const texto = await resposta.text();
-  return texto ? (JSON.parse(texto) as T) : null;
+  const dados = resposta.data;
+
+  return dados === undefined || dados === null || dados === ""
+    ? null
+    : (dados as T);
 }
 
 export default function Cargo({ buscaGlobal }: { buscaGlobal: string }) {
@@ -99,11 +111,11 @@ export default function Cargo({ buscaGlobal }: { buscaGlobal: string }) {
 
   const carregarCargos = useCallback(async () => {
     try {
-      const dados = await requisicao<CargoItem[]>();
+      const dados = await requisicao<CargoItem[]>("GET");
       setCargos(Array.isArray(dados) ? dados : []);
       setErroLista("");
     } catch (e) {
-      setErroLista(e instanceof Error ? e.message : "Erro inesperado.");
+      setErroLista(mensagemDeErro(e));
     } finally {
       setCarregando(false);
     }
@@ -136,16 +148,10 @@ export default function Cargo({ buscaGlobal }: { buscaGlobal: string }) {
     setAviso(null);
     try {
       if (editando) {
-        await requisicao(`/${editandoId}`, {
-          method: "PATCH",
-          body: JSON.stringify({ nome: nomeLimpo }),
-        });
+        await requisicao("PATCH", `/${editandoId}`, { nome: nomeLimpo });
         setAviso({ tipo: "ok", texto: "Cargo atualizado com sucesso." });
       } else {
-        await requisicao("", {
-          method: "POST",
-          body: JSON.stringify({ nome: nomeLimpo }),
-        });
+        await requisicao("POST", "", { nome: nomeLimpo });
         setAviso({ tipo: "ok", texto: "Cargo criado com sucesso." });
       }
       limparFormulario();
@@ -153,7 +159,7 @@ export default function Cargo({ buscaGlobal }: { buscaGlobal: string }) {
     } catch (e) {
       setAviso({
         tipo: "erro",
-        texto: e instanceof Error ? e.message : "Erro inesperado.",
+        texto: mensagemDeErro(e),
       });
     } finally {
       setSalvando(false);
@@ -171,14 +177,14 @@ export default function Cargo({ buscaGlobal }: { buscaGlobal: string }) {
 
     setAviso(null);
     try {
-      await requisicao(`/${cargo.id}`, { method: "DELETE" });
+      await requisicao("DELETE", `/${cargo.id}`);
       if (editandoId === cargo.id) limparFormulario();
       setAviso({ tipo: "ok", texto: "Cargo removido com sucesso." });
       await carregarCargos();
     } catch (e) {
       setAviso({
         tipo: "erro",
-        texto: e instanceof Error ? e.message : "Erro inesperado.",
+        texto: mensagemDeErro(e),
       });
     }
   }

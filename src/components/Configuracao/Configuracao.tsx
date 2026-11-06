@@ -58,8 +58,9 @@ export function IconeEngrenagem() {
 const PALAVRA_CONFIRMACAO = "EXCLUIR";
 
 async function excluirConta() {
-  // TODO: chame aqui o endpoint da API que exclui a conta, por exemplo:
-  // await fetch("https://vendas.gabrielpimentel.com.br/<endpoint-da-conta>", { method: "DELETE" });
+  // TODO: chame aqui o endpoint da API que exclui a conta, usando a
+  // instância central de src/Api/Api.ts, por exemplo:
+  // await api.delete("/<endpoint-da-conta>");
   //
   // Por enquanto, apenas apaga os dados guardados neste navegador.
   try {

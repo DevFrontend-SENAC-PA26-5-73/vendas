@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
 
-import { API_BASE_URL } from "../../lib/api";
+import api, { statusHttp } from "../../Api/Api";
 import {
   apenasEndereco,
   apenasLetras,
@@ -56,7 +55,6 @@ type ViaCepResposta = {
   erro?: boolean | string;
 };
 
-const API_URL = `${API_BASE_URL}/clientes`;
 const COR_ERRO = "#d32f2f";
 
 const formularioInicial: FormularioCliente = {
@@ -184,7 +182,7 @@ function Clientes({ buscaGlobal }: { buscaGlobal: string }) {
   // GET: listar todos os clientes
   async function buscarClientes() {
     try {
-      const resposta = await axios.get<unknown>(API_URL);
+      const resposta = await api.get<unknown>("/clientes");
 
       setClientes(normalizarClientes(resposta.data));
     } catch (erro) {
@@ -429,12 +427,12 @@ function Clientes({ buscaGlobal }: { buscaGlobal: string }) {
         };
         delete dadosAtualizacao.cpf;
 
-        await axios.patch(
-          `${API_URL}/${clienteEmEdicao}`,
+        await api.patch(
+          `/clientes/${clienteEmEdicao}`,
           dadosAtualizacao
         );
       } else {
-        await axios.post(API_URL, formulario);
+        await api.post("/clientes", formulario);
       }
 
       const estavaEditando = clienteEmEdicao !== null;
@@ -450,12 +448,11 @@ function Clientes({ buscaGlobal }: { buscaGlobal: string }) {
     } catch (erro) {
       console.error("Erro ao salvar cliente:", erro);
 
-      if (axios.isAxiosError(erro) && erro.response?.status === 409) {
+      const status = statusHttp(erro);
+
+      if (status === 409) {
         alert("Já existe um cliente cadastrado com esse CPF.");
-      } else if (
-        axios.isAxiosError(erro) &&
-        erro.response?.status === 400
-      ) {
+      } else if (status === 400) {
         alert("Confira os campos obrigatórios e tente novamente.");
       } else {
         alert(
@@ -502,7 +499,7 @@ function Clientes({ buscaGlobal }: { buscaGlobal: string }) {
     }
 
     try {
-      await axios.delete(`${API_URL}/${id}`);
+      await api.delete(`/clientes/${id}`);
 
       if (clienteEmEdicao === id) {
         limparFormulario();

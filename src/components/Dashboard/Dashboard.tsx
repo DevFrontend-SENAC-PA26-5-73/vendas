@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import "./Dashboard.css";
 
-import { API_BASE_URL } from "../../lib/api";
+import api, { erroSemResposta, statusHttp } from "../../Api/Api";
 import {
   lerMargensCategoriasProdutos,
   normalizarCategoriaProduto,
@@ -12,7 +12,6 @@ import SortableHeader from "../SortableHeader/SortableHeader";
 import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 import { ordenarLista } from "../../lib/ordenacao";
 
-const API_URL = API_BASE_URL;
 const CHAVE_HISTORICO_OCULTO = "vendas:dashboard:historico-oculto:v1";
 
 /* =========================
@@ -331,30 +330,32 @@ function Dashboard({ buscaGlobal }: { buscaGlobal: string }) {
   async function carregarDashboard() {
     try {
       const [respostaFluxoCaixa, respostaProdutos] = await Promise.all([
-        fetch(`${API_URL}/fluxo-caixa`),
-        fetch(`${API_URL}/produtos`),
+        api
+          .get<FluxoCaixaItemApi[]>("/fluxo-caixa")
+          .catch((erro: unknown) => {
+            throw new Error(
+              erroSemResposta(erro)
+                ? "Não foi possível conectar à API ao buscar o fluxo de caixa."
+                : `Erro ${statusHttp(erro)} ao buscar o fluxo de caixa.`,
+            );
+          }),
+        api
+          .get<ProdutoApi[]>("/produtos")
+          .catch((erro: unknown) => {
+            throw new Error(
+              erroSemResposta(erro)
+                ? "Não foi possível conectar à API ao buscar produtos."
+                : `Erro ${statusHttp(erro)} ao buscar produtos.`,
+            );
+          }),
       ]);
 
-      if (!respostaFluxoCaixa.ok) {
-        throw new Error(
-          `Erro ${respostaFluxoCaixa.status} ao buscar o fluxo de caixa.`,
-        );
-      }
+      const fluxoCaixa = respostaFluxoCaixa.data;
+      const produtos = respostaProdutos.data;
 
-      if (!respostaProdutos.ok) {
-        throw new Error(
-          `Erro ${respostaProdutos.status} ao buscar produtos.`,
-        );
+      if (!Array.isArray(fluxoCaixa) || !Array.isArray(produtos)) {
+        throw new Error("A API não retornou as listas esperadas.");
       }
-
-      const [fluxoCaixa, produtos] = await Promise.all([
-        respostaFluxoCaixa.json() as Promise<
-          FluxoCaixaItemApi[]
-        >,
-        respostaProdutos.json() as Promise<
-          ProdutoApi[]
-        >,
-      ]);
 
       setDados({
         fluxoCaixa,
