@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Heart, Search, ShoppingCart, User } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { LogOut, Search, Settings, User } from "lucide-react";
 
 import "./Cabecalho.css";
 import {
@@ -23,6 +24,12 @@ type Resultado = {
 };
 
 const API = "https://vendas.gabrielpimentel.com.br";
+
+// USUÁRIO LOGADO (valores de exemplo: trocar quando existir login)
+const USUARIO_EXEMPLO = {
+  nome: "Nome do usuário",
+  cargo: "Cargo",
+};
 
 function extrairLista(
   dados: unknown,
@@ -116,6 +123,57 @@ function Cabecalho({
 
   const [aberto, setAberto] = useState(false);
 
+  // MENU DO PERFIL
+  const [menuPerfilAberto, setMenuPerfilAberto] = useState(false);
+
+  const botaoPerfilRef = useRef<HTMLButtonElement>(null);
+
+  const menuPerfilRef = useRef<HTMLDivElement>(null);
+
+  // POSIÇÃO DO MENU (fixa na tela, para não ser cortada pelo cabeçalho)
+  const [posicaoMenu, setPosicaoMenu] = useState({ top: 0, right: 0 });
+
+
+  // FECHAR MENU DO PERFIL AO CLICAR FORA OU APERTAR ESC
+  useEffect(() => {
+
+    if (!menuPerfilAberto) {
+      return;
+    }
+
+    function aoClicarFora(evento: MouseEvent) {
+      const alvo = evento.target as Node;
+
+      if (
+        !botaoPerfilRef.current?.contains(alvo) &&
+        !menuPerfilRef.current?.contains(alvo)
+      ) {
+        setMenuPerfilAberto(false);
+      }
+    }
+
+    function fechar() {
+      setMenuPerfilAberto(false);
+    }
+
+    function aoApertarTecla(evento: KeyboardEvent) {
+      if (evento.key === "Escape") {
+        setMenuPerfilAberto(false);
+      }
+    }
+
+    document.addEventListener("mousedown", aoClicarFora);
+    document.addEventListener("keydown", aoApertarTecla);
+    window.addEventListener("resize", fechar);
+
+    return () => {
+      document.removeEventListener("mousedown", aoClicarFora);
+      document.removeEventListener("keydown", aoApertarTecla);
+      window.removeEventListener("resize", fechar);
+    };
+
+  }, [menuPerfilAberto]);
+
 
   // ATUALIZAR LOGO E NOME DA EMPRESA
   useEffect(() => {
@@ -207,11 +265,6 @@ function Cabecalho({
           dadosVendas,
           ["vendas"]
         );
-
-        console.log("PRODUTOS:", produtos);
-        console.log("CLIENTES:", clientes);
-        console.log("VENDAS:", vendas);
-
 
         const lista: Resultado[] = [];
 
@@ -409,11 +462,7 @@ function Cabecalho({
 
 
         if (ativo) {
-
           setResultados(lista);
-
-          console.log("TODOS OS RESULTADOS:", lista);
-
         }
 
       } catch (error) {
@@ -488,6 +537,46 @@ function Cabecalho({
     aoAlterarBusca("");
 
     setAberto(false);
+
+  }
+
+
+  // ABRIR / FECHAR MENU DO PERFIL
+  function alternarMenuPerfil() {
+
+    if (!menuPerfilAberto && botaoPerfilRef.current) {
+
+      const caixa = botaoPerfilRef.current.getBoundingClientRect();
+
+      setPosicaoMenu({
+        top: caixa.bottom + 8,
+        right: window.innerWidth - caixa.right,
+      });
+
+    }
+
+    setMenuPerfilAberto((atual) => !atual);
+
+  }
+
+
+  // IR PARA CONFIGURAÇÃO PELO MENU DO PERFIL
+  function abrirConfiguracao() {
+
+    aoMudarPagina("Configuração");
+
+    setMenuPerfilAberto(false);
+
+  }
+
+
+  // SAIR (ainda não existe login: ligar aqui quando existir)
+  function sair() {
+
+    setMenuPerfilAberto(false);
+
+    // TODO: limpar sessão/token e voltar para a tela de login
+    console.log("Sair clicado");
 
   }
 
@@ -643,37 +732,66 @@ function Cabecalho({
         </div>
 
 
-        {/* FAVORITOS */}
+        {/* PERFIL COM MENU */}
         <button
-          className="botao"
-          type="button"
-          title="Favoritos"
-        >
-          <Heart size={18} />
-        </button>
-
-
-        {/* CARRINHO */}
-        <button
-          className="botao"
-          type="button"
-          title="Carrinho"
-        >
-          <ShoppingCart size={18} />
-        </button>
-
-
-        {/* PERFIL */}
-        <button
+          ref={botaoPerfilRef}
           className="perfil"
           type="button"
           title="Perfil"
+          aria-haspopup="menu"
+          aria-expanded={menuPerfilAberto}
+          onClick={alternarMenuPerfil}
         >
           <User size={20} />
         </button>
 
 
       </header>
+
+      {menuPerfilAberto &&
+
+        createPortal(
+
+          <div
+            ref={menuPerfilRef}
+            className="perfil-menu"
+            role="menu"
+            style={{
+              top: posicaoMenu.top,
+              right: posicaoMenu.right,
+            }}
+          >
+
+            <div className="perfil-menu-usuario">
+              <strong>{USUARIO_EXEMPLO.nome}</strong>
+              <small>{USUARIO_EXEMPLO.cargo}</small>
+            </div>
+
+            <button
+              type="button"
+              role="menuitem"
+              className="perfil-menu-item"
+              onClick={abrirConfiguracao}
+            >
+              <Settings size={16} />
+              Configuração
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              className="perfil-menu-item perfil-menu-sair"
+              onClick={sair}
+            >
+              <LogOut size={16} />
+              Sair
+            </button>
+
+          </div>,
+
+          document.body
+
+        )}
 
     </div>
 
