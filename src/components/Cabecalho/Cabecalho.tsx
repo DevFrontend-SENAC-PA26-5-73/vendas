@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { LogOut, Search, Settings, User } from "lucide-react";
 
 import "./Cabecalho.css";
+import api from "../../Api/Api";
 import {
   lerIdentidade,
   type Identidade,
@@ -22,8 +23,6 @@ type Resultado = {
   pesquisa: string;
   pagina: string;
 };
-
-const API = "https://vendas.gabrielpimentel.com.br";
 
 // USUÁRIO LOGADO (valores de exemplo: trocar quando existir login)
 const USUARIO_EXEMPLO = {
@@ -214,28 +213,20 @@ function Cabecalho({
         const respostas = await Promise.all(
 
           [
-            `${API}/produtos`,
-            `${API}/clientes`,
-            `${API}/vendas`
-          ].map(async (url) => {
+            "/produtos",
+            "/clientes",
+            "/vendas"
+          ].map(async (rota) => {
 
             try {
 
-              const resposta = await fetch(url);
+              const resposta = await api.get<unknown>(rota);
 
-              if (!resposta.ok) {
-                console.warn(
-                  `Erro ao consultar ${url}: ${resposta.status}`
-                );
-
-                return null;
-              }
-
-              return await resposta.json();
+              return resposta.data;
 
             } catch (error) {
 
-              console.error(`Erro na rota ${url}:`, error);
+              console.error(`Erro na rota ${rota}:`, error);
 
               return null;
             }

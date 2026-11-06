@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import axios from "axios";
 import {
   PackageX,
   RefreshCw,
@@ -9,15 +8,19 @@ import {
 
 import "./Inventario.css";
 
-import { API_BASE_URL } from "../../lib/api";
+import api, {
+  erroSemResposta,
+  mensagemDoErro,
+  statusHttp,
+} from "../../Api/Api";
 import { ordenarLista } from "../../lib/ordenacao";
 import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 import SortableHeader from "../SortableHeader/SortableHeader";
 
 const API = {
-  produtos: `${API_BASE_URL}/produtos`,
-  estoque: `${API_BASE_URL}/estoque`,
-  fluxoCaixa: `${API_BASE_URL}/fluxo-caixa`,
+  produtos: "/produtos",
+  estoque: "/estoque",
+  fluxoCaixa: "/fluxo-caixa",
 };
 
 const ESTOQUE_MINIMO = 5;
@@ -123,35 +126,23 @@ function normalizarTexto(valor: string): string {
 }
 
 function diagnosticarErro(erro: unknown): Mensagem {
-  if (axios.isAxiosError(erro)) {
-    if (!erro.response) {
-      return {
-        tipo: "erro",
-        codigo: "INV-N001",
-        texto: "A API não respondeu. Verifique a rede e tente novamente.",
-      };
-    }
-
-    const resposta = erro.response.data as
-      | { message?: unknown; error?: unknown }
-      | string
-      | null;
-    const detalhe =
-      typeof resposta === "string"
-        ? resposta
-        : resposta && typeof resposta === "object"
-          ? resposta.message ?? resposta.error
-          : undefined;
-
+  if (erroSemResposta(erro)) {
     return {
       tipo: "erro",
-      codigo: `INV-A${erro.response.status}`,
+      codigo: "INV-N001",
+      texto: "A API não respondeu. Verifique a rede e tente novamente.",
+    };
+  }
+
+  const status = statusHttp(erro);
+
+  if (status > 0) {
+    return {
+      tipo: "erro",
+      codigo: `INV-A${status}`,
       texto:
-        Array.isArray(detalhe)
-          ? detalhe.map(String).join(", ")
-          : typeof detalhe === "string"
-            ? detalhe
-            : `A API respondeu com erro ${erro.response.status}.`,
+        mensagemDoErro(erro) ||
+        `A API respondeu com erro ${status}.`,
     };
   }
 
@@ -183,8 +174,8 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
   const carregarInventario = useCallback(async (): Promise<boolean> => {
     try {
       const [respostaProdutos, respostaEstoque] = await Promise.allSettled([
-        axios.get<unknown>(API.produtos, { timeout: 15000 }),
-        axios.get<unknown>(API.estoque, { timeout: 15000 }),
+        api.get<unknown>(API.produtos, { timeout: 15000 }),
+        api.get<unknown>(API.estoque, { timeout: 15000 }),
       ]);
 
       if (respostaProdutos.status === "rejected") {
@@ -346,7 +337,7 @@ function Inventario({ buscaGlobal }: { buscaGlobal: string }) {
     setMensagem(null);
 
     try {
-      await axios.post(API.fluxoCaixa, {
+      await api.post(API.fluxoCaixa, {
         tipo: "saida",
         produto_id: item.id,
         quantidade: item.quantidade,

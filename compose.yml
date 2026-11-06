@@ -1,0 +1,19 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: vendas-frontend
+
+    ports:
+      - "8080:80"
+
+    restart: unless-stopped
+
+    networks:
+      - frontend-network
+
+networks:
+  frontend-network:
+    driver: bridge

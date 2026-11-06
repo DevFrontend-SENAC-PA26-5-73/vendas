@@ -6,10 +6,10 @@ import { ordenarLista } from "../../lib/ordenacao";
 import type { DirecaoOrdenacao } from "../../lib/ordenacao";
 import "./Funcionario.css";
 
-import { API_BASE_URL } from "../../lib/api";
+import api, { mensagemDoErro, statusHttp } from "../../Api/Api";
 
-const API_FUNCIONARIOS = `${API_BASE_URL}/funcionarios`;
-const API_CARGOS = `${API_BASE_URL}/cargo`;
+const API_FUNCIONARIOS = "/funcionarios";
+const API_CARGOS = "/cargo";
 
 interface Funcionario {
   id: number;
@@ -91,40 +91,39 @@ function formatarData(iso: string) {
   return ano && mes && dia ? `${dia}/${mes}/${ano}` : "-";
 }
 
+const MENSAGENS_ERRO: Record<number, string> = {
+  400: "Dados inválidos. Confira os campos e tente novamente.",
+  404: "Funcionário não encontrado.",
+};
+
 async function requisicao<T = unknown>(
+  metodo: "GET" | "POST" | "PATCH" | "DELETE",
   url: string,
-  opcoes: RequestInit = {}
+  corpo?: unknown,
 ): Promise<T | null> {
-  const resposta = await fetch(url, {
-    ...opcoes,
-    headers: { "Content-Type": "application/json", ...opcoes.headers },
+  const resposta = await api.request<T>({
+    url,
+    method: metodo,
+    data: corpo,
   });
 
-  if (!resposta.ok) {
-    let detalhe = "";
-    try {
-      const corpoErro = await resposta.json();
-      detalhe = corpoErro.message ?? corpoErro.error ?? "";
-    } catch {
-      // resposta sem JSON
-    }
+  const dados = resposta.data;
 
-    const mensagens: Record<number, string> = {
-      400: "Dados inválidos. Confira os campos e tente novamente.",
-      404: "Funcionário não encontrado.",
-    };
-
-    throw new Error(
-      detalhe || mensagens[resposta.status] || `Erro inesperado (${resposta.status}).`
-    );
-  }
-
-  const texto = await resposta.text();
-  return texto ? (JSON.parse(texto) as T) : null;
+  return dados === undefined || dados === null || dados === ""
+    ? null
+    : (dados as T);
 }
 
 function mensagemDeErro(e: unknown) {
-  return e instanceof Error ? e.message : "Erro inesperado.";
+  const status = statusHttp(e);
+
+  if (status === 0) {
+    return e instanceof Error ? e.message : "Erro inesperado.";
+  }
+
+  const detalhe = mensagemDoErro(e);
+
+  return detalhe || MENSAGENS_ERRO[status] || `Erro inesperado (${status}).`;
 }
 
 /* ---------- Componente ---------- */
@@ -159,8 +158,8 @@ export default function Funcionario({ buscaGlobal }: { buscaGlobal: string }) {
   const carregarDados = useCallback(async () => {
     try {
       const [listaFuncionarios, listaCargos] = await Promise.all([
-        requisicao<Funcionario[]>(API_FUNCIONARIOS),
-        requisicao<Cargo[]>(API_CARGOS),
+        requisicao<Funcionario[]>("GET", API_FUNCIONARIOS),
+        requisicao<Cargo[]>("GET", API_CARGOS),
       ]);
       setFuncionarios(Array.isArray(listaFuncionarios) ? listaFuncionarios : []);
       setCargos(Array.isArray(listaCargos) ? listaCargos : []);
@@ -276,16 +275,10 @@ export default function Funcionario({ buscaGlobal }: { buscaGlobal: string }) {
     setAviso(null);
     try {
       if (editando) {
-        await requisicao(`${API_FUNCIONARIOS}/${editandoId}`, {
-          method: "PATCH",
-          body: JSON.stringify(corpo),
-        });
+        await requisicao("PATCH", `${API_FUNCIONARIOS}/${editandoId}`, corpo);
         setAviso({ tipo: "ok", texto: "Funcionário atualizado com sucesso." });
       } else {
-        await requisicao(API_FUNCIONARIOS, {
-          method: "POST",
-          body: JSON.stringify(corpo),
-        });
+        await requisicao("POST", API_FUNCIONARIOS, corpo);
         setAviso({ tipo: "ok", texto: "Funcionário criado com sucesso." });
       }
       limparFormulario();
@@ -319,7 +312,7 @@ export default function Funcionario({ buscaGlobal }: { buscaGlobal: string }) {
 
     setAviso(null);
     try {
-      await requisicao(`${API_FUNCIONARIOS}/${f.id}`, { method: "DELETE" });
+      await requisicao("DELETE", `${API_FUNCIONARIOS}/${f.id}`);
       if (editandoId === f.id) limparFormulario();
       setAviso({ tipo: "ok", texto: "Funcionário removido com sucesso." });
       await carregarDados();

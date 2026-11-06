@@ -14,7 +14,12 @@ import {
 import Button from "../Button/Button";
 import "./Produtos.css";
 
-import { API_BASE_URL } from "../../lib/api";
+import api, {
+  API_URL,
+  dadosDoErro,
+  erroSemResposta,
+  statusHttp,
+} from "../../Api/Api";
 import {
   CATEGORIAS_PRODUTOS,
   lerMargensCategoriasProdutos,
@@ -70,8 +75,7 @@ type ApiErro = {
   statusCode?: number;
 };
 
-const API_URL = API_BASE_URL;
-const API_PRODUTOS = `${API_URL}/produtos`;
+const API_PRODUTOS = "/produtos";
 
 const formularioInicial: FormularioProduto = {
   nome: "",
@@ -265,19 +269,39 @@ function formatarMoeda(valor: number) {
   );
 }
 
-async function lerResposta(
-  resposta: Response,
-): Promise<unknown> {
-  const texto = await resposta.text();
-
-  if (!texto) {
-    return null;
-  }
-
+/**
+ * Executa uma requisição na API central e converte os erros no mesmo
+ * formato usado pela tela (Error com "codigo"), preservando as mensagens.
+ */
+async function requisicao<T = unknown>(
+  metodo: "GET" | "POST" | "PATCH" | "DELETE",
+  url: string,
+  corpo?: unknown,
+  parametros?: Record<string, string | number>,
+): Promise<T> {
   try {
-    return JSON.parse(texto);
-  } catch {
-    return texto;
+    const resposta = await api.request<T>({
+      url,
+      method: metodo,
+      data: corpo,
+      params: parametros,
+    });
+
+    return resposta.data;
+  } catch (erro) {
+    if (erroSemResposta(erro)) {
+      throw new TypeError("Não foi possível conectar à API.", {
+        cause: erro,
+      });
+    }
+
+    const status = statusHttp(erro);
+
+    if (status > 0) {
+      throw criarErroApi(status, dadosDoErro(erro));
+    }
+
+    throw erro;
   }
 }
 
@@ -383,31 +407,10 @@ async function verificarVinculosProduto(
   motivo: string;
 }> {
   try {
-    const [itensVendaResposta, fluxoResposta] =
-      await Promise.all([
-        fetch(`${API_URL}/itemvenda`, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-        }),
-        fetch(`${API_URL}/fluxo-caixa`, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-        }),
-      ]);
-
-    const itensVenda =
-      itensVendaResposta.ok
-        ? await lerResposta(itensVendaResposta)
-        : [];
-
-    const fluxoCaixa =
-      fluxoResposta.ok
-        ? await lerResposta(fluxoResposta)
-        : [];
+    const [itensVenda, fluxoCaixa] = await Promise.all([
+      requisicao<unknown>("GET", "/itemvenda").catch(() => []),
+      requisicao<unknown>("GET", "/fluxo-caixa").catch(() => []),
+    ]);
 
     const itensVinculados = Array.isArray(itensVenda)
       ? itensVenda.some((item) => {
@@ -513,27 +516,12 @@ function Produtos({ buscaGlobal }: { buscaGlobal: string }) {
   const buscarProdutos = useCallback(
     async () => {
       try {
-        const resposta = await fetch(
-          `${API_PRODUTOS}?atualizacao=${Date.now()}`,
-          {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-            },
-            cache: "no-store",
-          },
+        const dados = await requisicao<unknown>(
+          "GET",
+          API_PRODUTOS,
+          undefined,
+          { atualizacao: Date.now() },
         );
-
-        const dados = await lerResposta(
-          resposta,
-        );
-
-        if (!resposta.ok) {
-          throw criarErroApi(
-            resposta.status,
-            dados,
-          );
-        }
 
         setProdutos(
           normalizarProdutos(dados),
@@ -558,7 +546,7 @@ function Produtos({ buscaGlobal }: { buscaGlobal: string }) {
             tipo: "erro",
             codigo: "PROD-N001",
             texto:
-              `A API não respondeu. Confirme se o servidor ${API_BASE_URL} está acessível neste computador e se o front-end não está em HTTPS.`,
+              `A API não respondeu. Confirme se o servidor ${API_URL} está acessível neste computador e se o front-end não está em HTTPS.`,
           });
         } else if (
           erro instanceof Error &&
@@ -875,27 +863,7 @@ function Produtos({ buscaGlobal }: { buscaGlobal: string }) {
     url: string,
     payload: PayloadProduto,
   ) {
-    const resposta = await fetch(url, {
-      method: metodo,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const dados = await lerResposta(
-      resposta,
-    );
-
-    if (!resposta.ok) {
-      throw criarErroApi(
-        resposta.status,
-        dados,
-      );
-    }
-
-    return dados;
+    return requisicao<unknown>(metodo, url, payload);
   }
 
   async function salvarProduto() {
@@ -915,7 +883,7 @@ function Produtos({ buscaGlobal }: { buscaGlobal: string }) {
       setMensagem(null);
 
       console.group(
-        `[CATÁLOGO] ${editando ? "PATCH" : "POST"} ${url}`,
+        `[CATÁLOGO] ${editando ? "PATCH" : "POST"} ${API_URL}${url}`,
       );
       console.log("Payload:", payload);
       console.groupEnd();
@@ -1041,26 +1009,10 @@ function Produtos({ buscaGlobal }: { buscaGlobal: string }) {
         return;
       }
 
-      const resposta = await fetch(
+      await requisicao<unknown>(
+        "DELETE",
         `${API_PRODUTOS}/${produto.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Accept: "application/json",
-          },
-        },
       );
-
-      const dados = await lerResposta(
-        resposta,
-      );
-
-      if (!resposta.ok) {
-        throw criarErroApi(
-          resposta.status,
-          dados,
-        );
-      }
 
       if (produtoEmEdicao === produto.id) {
         limparFormulario();
