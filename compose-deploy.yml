@@ -1,0 +1,7 @@
+services:
+  frontend:
+    image: srstark7/vendas-front:latest
+    container_name: vendas-frontend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
