@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-
-    container_name: vendas-frontend
+      image: rmarinho12/vendas-front:latest
+    container_name: frontend-vendas
 
     ports:
       - "8080:80"
