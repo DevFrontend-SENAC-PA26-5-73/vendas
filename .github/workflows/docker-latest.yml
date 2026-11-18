@@ -1,16 +1,12 @@
 name: Build and Push Docker
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-    types:
-      - closed
 
 jobs:
   build-and-push:
-    if: github.event.pull_request.merged == true
-
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +27,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            srstark7/vendas-front:latest
-            srstark7/vendas-front:${{ github.sha }}
+          tags: rmarinho12/front-vendas:latest
